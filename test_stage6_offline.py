@@ -301,6 +301,13 @@ class ScriptedAlignmentGate(SimGate):
         self.test_errors=list(errors)
 
     def measure(self,m,label):
+        if label.startswith('settle_'):
+            # Scripted correction tests isolate the correction budget from
+            # the independent, physically modelled settling tests below.
+            err=[0.,0.]
+            self.record('measurements',label=label,error_mm=err,
+                        t0_drift_mm=[0.,0.],scatter_estimate_mm=0.,saved_offsets=self.offsets())
+            return err
         if not self.test_errors:raise AssertionError('Unexpected extra measurement')
         err=list(self.test_errors.pop(0))
         self.record('measurements',label=label,error_mm=err,
@@ -541,7 +548,7 @@ def test_active_retry_from_nonzero_sweep_position():
 def test_original_cumulative_cap_survives_retry():
     class FaultAtEnd(ScriptedAlignmentGate):
         def measure(self,m,label):
-            if self.test_errors[0]=='FAIL':
+            if not label.startswith('settle_') and self.test_errors[0]=='FAIL':
                 self.test_errors.pop(0)
                 raise gate.GateAbort('Camera return/scatter exceeds tolerance')
             return super().measure(m,label)
@@ -669,7 +676,7 @@ if __name__=='__main__':
 def test_inline_print_cumulative_limit_not_reset():
     class FaultAtEnd(ScriptedAlignmentGate):
         def measure(self,m,label):
-            if self.test_errors[0]=='FAIL':
+            if not label.startswith('settle_') and self.test_errors[0]=='FAIL':
                 self.test_errors.pop(0)
                 raise gate.GateAbort('Camera return/scatter exceeds tolerance')
             return super().measure(m,label)
@@ -784,3 +791,72 @@ def test_mode_install_guards():
 if __name__=='__main__':
     test_idex_mode_routing()
     test_mode_install_guards()
+
+
+# Beta 4: before the first correction, force two settled full tool-change
+# references; refuse repeated drift without modifying any saved offset.
+class UnstableSettlingGate(SimGate):
+    def measure(self,m,label):
+        if label.startswith('settle_'):
+            check=int(label.split('_')[-1])
+            error=[.08+(.025 if check%2==0 else 0.),.02]
+            self.record('measurements',label=label,error_mm=error,
+                        t0_drift_mm=[0.,0.],scatter_estimate_mm=0.,saved_offsets=self.offsets())
+            return error
+        return super().measure(m,label)
+
+
+def test_settling_accepted_before_first_write():
+    with tempfile.TemporaryDirectory() as tmp:
+        c=Config();s=SimGate(c);s.results=tmp
+        c.p.var['auto_xy_enabled']=1
+        s.cmd_AUTO_XY_GATE(Cmd())
+        assert s.report['settling_status']=='STABLE'
+        assert s.report['settling_checks_used']==2
+        samples=s.report['settling_checks']
+        assert len(samples)==2 and samples[1]['stable'] is True
+        labels=[m['label'] for m in s.report['measurements']]
+        assert labels[:2]==['settle_01','settle_02'],labels
+        assert len(s.report['saved_corrections'])>=1
+        assert s.report['status']=='CALIBRATED_AND_VAOC_EXITED'
+    print('PASS: two full toolshift sequences settle BEFORE any offset write.')
+
+
+def test_unstable_settling_never_writes_offsets():
+    with tempfile.TemporaryDirectory() as tmp:
+        c=Config();s=UnstableSettlingGate(c);s.results=tmp
+        c.p.var['auto_xy_enabled']=1
+        baseline=s.offsets()
+        try:s.cmd_AUTO_XY_GATE(Cmd())
+        except ValueError as e:assert 'Initial toolshift settling failed' in str(e)
+        else:raise AssertionError('Unstable toolshifts should abort safely')
+        assert s.report['settling_status']=='FAILED'
+        assert s.report['settling_checks_used']==4
+        assert not s.report.get('saved_corrections')
+        assert not s.report.get('write_intents')
+        assert s.offsets()==baseline
+        assert c.p.var['auto_xy_enabled']==0 and c.p.var['auto_xy_fault']==1
+        assert s.report['status']=='FAILED_DO_NOT_PRINT'
+        assert len(s.report['settling_checks'])==4
+    print('PASS: unstable settling fails closed with no offset writes.')
+
+if __name__=='__main__':
+    test_settling_accepted_before_first_write()
+    test_unstable_settling_never_writes_offsets()
+
+
+def test_checker_understands_confirmed_rollback():
+    spec_c=importlib.util.spec_from_file_location('checker',root/'check_last_failure.py')
+    checker=importlib.util.module_from_spec(spec_c);spec_c.loader.exec_module(checker)
+    sample={'original_offsets':[-.1974339066,-.2585288421,.0225],
+            'saved_corrections':[{'after':[-.1488339066,-.2385288421,.0225]}],
+            'rollback':'ORIGINAL_SAVED_VALUES_RESTORED; RUNTIME ALIGNMENT NOT VERIFIED'}
+    expected,description=checker.expected_saved_state(sample)
+    assert expected==sample['original_offsets']
+    assert 'rollback' in description
+    sample['rollback']='DEFERRED_FOR_RETRY'
+    expected,description=checker.expected_saved_state(sample)
+    assert expected==sample['saved_corrections'][-1]['after']
+    print('PASS: read-only diagnostic uses restored baseline after confirmed rollback.')
+
+if __name__=='__main__':test_checker_understands_confirmed_rollback()

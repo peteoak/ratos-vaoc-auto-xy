@@ -12,6 +12,22 @@ from urllib.request import Request, urlopen
 ROOT=Path('/home/pi/auto_xy/print_gate_runs')
 
 
+def expected_saved_state(report):
+    """Determine which SAVED offset baseline the report says is current.
+
+    A successful rollback restores original saved values even when the report
+    records earlier confirmed writes. It does not prove the runtime VAOC
+    compensation has also been reconciled.
+    """
+    rollback=str(report.get('rollback',''))
+    if rollback.startswith('ORIGINAL_SAVED_VALUES_RESTORED'):
+        return report.get('original_offsets'), 'original baseline after confirmed rollback'
+    writes=report.get('saved_corrections',[])
+    if writes:
+        return writes[-1]['after'], 'last confirmed saved correction'
+    return report.get('original_offsets'), 'original baseline (no confirmed writes)'
+
+
 def main():
     reports=sorted(ROOT.glob('*/report.json'),key=lambda p:p.stat().st_mtime,reverse=True)
     if not reports:
@@ -37,18 +53,21 @@ def main():
     offset_keys=('idex_xoffset','idex_yoffset','idex_zoffset')
     current=[float(var[k]) for k in offset_keys]
     baseline=report.get('original_offsets')
-    expected=report.get('saved_corrections',[])
-    expected=expected[-1]['after'] if expected else baseline
-    match=(expected is not None and all(abs(current[i]-expected[i])<.0002 for i in range(3)))
+    expected,expected_type=expected_saved_state(report)
+    match=(expected is not None and len(expected)==3 and
+           all(abs(current[i]-expected[i])<.0002 for i in range(3)))
     actual_vaoc=status.get('gcode_macro _VAOC',{}).get('is_started','UNKNOWN')
     print('Latest report:',report_path)
     for k in ('status','mode','error','retry_offered','one_time_retry','reuse_active_vaoc','inline_print_retry_enabled','rollback',
               'measurement_cycles','corrections_applied','verification_attempts'):
         print(k+':',report.get(k,'not recorded'))
     print('Original offset baseline:',baseline)
-    print('Last confirmed saved offset:',expected)
+    print('Last confirmed saved correction:',
+          report['saved_corrections'][-1]['after'] if report.get('saved_corrections') else None)
+    print('Expected saved offset state:',expected_type,expected)
     print('Current saved offsets:',current)
-    print('Match latest confirmed write/original:',match)
+    print('Matches report-expected SAVED offsets:',match)
+    print('NOTE: saved-value match does NOT verify runtime VAOC alignment.')
     print('Offset write intents:',len(report.get('write_intents',[])),
           'confirmed writes:',len(report.get('saved_corrections',[])))
     print('Printer state:',status['print_stats'].get('state'),

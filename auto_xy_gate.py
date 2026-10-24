@@ -59,6 +59,11 @@ class AutoXYGate:
         self.max_step=config.getfloat('max_step',.05,above=.005,maxval=.05)
         self.max_total=config.getfloat('max_total_change',.3,above=.05,maxval=.3)
         self.settle=config.getfloat('settle',.8,above=.2,maxval=3)
+        # Verify repeatable tool seating BEFORE any saved-offset write.
+        # Each measurement performs T0 -> T1 -> T0; a stable consecutive pair
+        # is required, with a bounded budget to fail safely if not settled.
+        self.preflight_settling_checks=config.getint('preflight_settling_checks',4,minval=2,maxval=6)
+        self.preflight_settling_tolerance=config.getfloat('preflight_settling_tolerance',.015,above=.004,maxval=.03)
         self.timeout=config.getfloat('snapshot_timeout',7.,above=2.,maxval=12.)
         self.max_camera_nozzle_temp=config.getfloat('max_camera_nozzle_temp',155.,above=100.,maxval=175.)
         self.max_camera_target_temp=config.getfloat('max_camera_target_temp',150.,above=100.,maxval=175.)
@@ -349,6 +354,94 @@ class AutoXYGate:
             raise GateAbort('Camera return/scatter exceeds tolerance')
         if maximum(err)>.300: raise GateAbort('Alignment exceeds 0.300 mm safety limit')
         return err
+    def settle_toolshifts(self,m,gcmd):
+        """Require repeatable T0/T1/T0 returns before the first correction.
+
+        Settling measurements never call _VAOC_SET_TOOL or change saved offsets.
+        A failure stops calibration rather than trying to correct an unstable
+        carriage/camera reference. Post-write measurement checks remain active, but an unusual gain
+        cannot override two independent, stable in-tolerance readings.
+        """
+        last=None
+        self.phase='SETTLING_TOOLSHIFTS'
+        self.report['settling_status']='MEASURING'
+        self.report['settling_limit_mm']=self.preflight_settling_tolerance
+        self.report['settling_max_checks']=self.preflight_settling_checks
+        self.save_report()
+        for index in range(1,self.preflight_settling_checks+1):
+            self.ensure_ok()
+            reading=self.measure(m,'settle_%02d'%index)
+            if last is not None:
+                delta=vecsub(reading,last)
+                self.record('settling_checks',check=index,error_mm=reading,
+                            change_mm=delta,stable=maximum(delta)<=self.preflight_settling_tolerance)
+                if maximum(delta)<=self.preflight_settling_tolerance:
+                    self.report['settling_status']='STABLE'
+                    self.report['settling_checks_used']=index
+                    self.save_report()
+                    gcmd.respond_info('AUTO XY: toolshift settling stable after %d no-write checks (X drift %.4f, Y drift %.4f mm)'%(
+                        index,abs(delta[0]),abs(delta[1])))
+                    return
+            else:
+                self.record('settling_checks',check=index,error_mm=reading,change_mm=None,stable=False)
+            last=reading
+        self.report['settling_status']='FAILED'
+        self.report['settling_checks_used']=self.preflight_settling_checks
+        self.save_report()
+        raise GateAbort('Initial toolshift settling failed: repeatability exceeds %.3f mm after %d no-write checks'%(
+            self.preflight_settling_tolerance,self.preflight_settling_checks))
+
+    def confirm_anomalous_alignment(self, matrix, cycle, initial_error,
+                                    anomalous, used_verifications, gcmd):
+        """Verify the *alignment*, not the apparent camera response gain.
+
+        A surprisingly large (but bounded and correctly directed) response
+        must not reject an already in-tolerance result without checking it.
+        We require TWO independent no-write T0/T1/T0 measurements after the
+        anomalous reading. The readings must agree with each other and with
+        the anomalous reading, both remain within the alignment tolerance,
+        and the camera return, scatter and persisted offsets must be stable.
+
+        This consumes existing verification slots and cannot apply further
+        offsets, increase correction budgets, or mask a gross/reverse move.
+        """
+        if maximum(initial_error)>self.tol:
+            raise GateAbort('Offset response anomaly: alignment outside tolerance')
+        if used_verifications + 2 > self.max_verify:
+            raise GateAbort('Offset response anomaly: insufficient verification budget')
+        saved=self.report.get('saved_corrections',[])
+        if not saved:
+            raise GateAbort('Offset response anomaly: no confirmed offset write')
+        expected=saved[-1]['after']
+        if max(abs(self.offsets()[i]-expected[i]) for i in range(3))>.0001:
+            raise GateAbort('Offset response anomaly: saved offsets changed before recheck')
+        prior=list(initial_error)
+        self.phase='RECHECKING_ALIGNMENT'  # not eligible for in-place retry
+        self.report['response_gain_recheck_status']='MEASURING'
+        self.save_report()
+        for index in (1,2):
+            reading=self.measure(matrix,'gain_recheck_%02d_%02d'%(cycle,index))
+            detail=self.report['measurements'][-1]
+            change=vecsub(reading,prior)
+            self.record('response_gain_rechecks',
+                        cycle=cycle,sequence=index,error_mm=reading,change_mm=change,
+                        t0_drift_mm=detail['t0_drift_mm'],
+                        scatter_estimate_mm=detail['scatter_estimate_mm'])
+            if max(abs(self.offsets()[i]-expected[i]) for i in range(3))>.0001:
+                raise GateAbort('Offset response anomaly: saved offsets changed during recheck')
+            if (not all(math.isfinite(x) for x in reading) or
+                maximum(reading)>self.tol or maximum(change)>.015 or
+                maximum(detail['t0_drift_mm'])>.015 or
+                detail['scatter_estimate_mm']>.015):
+                raise GateAbort('Offset response anomaly: repeat measurements not stable/in tolerance')
+            prior=list(reading)
+            gcmd.respond_info('AUTO XY: unexpected response; no-write alignment confirmation %d/2 X=%+.4f Y=%+.4f mm' % (
+                index,reading[0],reading[1]))
+        self.report['response_gain_recheck_status']='CONFIRMED_IN_TOLERANCE'
+        self.report['response_gain_warning']='UNUSUAL_OFFSET_RESPONSE; REPEATABLE_IN_TOLERANCE_ALIGNMENT; INVESTIGATE_IF_REPEATED'
+        self.save_report()
+        return prior
+
     def apply(self,step,original):
         if maximum(step)>self.max_step+1e-6: raise GateAbort('Correction exceeded per-pass cap')
         cur=self.offsets()
@@ -418,6 +511,7 @@ class AutoXYGate:
             desc.startswith('Camera/nozzle detection failed at '),
             desc.startswith('Camera scale fit/zero repeatability failed'),
             desc.startswith('Camera return/scatter exceeds tolerance'),
+            desc.startswith('Initial toolshift settling failed:'),
             desc.startswith('Verification limit reached'),
             desc.startswith('Correction limit reached'),
             desc.startswith('T0/T1 camera scale disagreement > 12%'),
@@ -651,7 +745,7 @@ class AutoXYGate:
 
     def health(self,gcmd):
         v=self.variables()
-        gcmd.respond_info('AUTO XY Stage 6.3.7 (AFTER_HEATING_BED / pre-Beacon); limits=%d corrections, %d verifications; inline_print_retry=%s; retry_available=%s retry_used=%s; active_vaoc_context=%s; switch=%s; fault=%s; interrupted=%s; busy=%s; last_error=%s'%(
+        gcmd.respond_info('AUTO XY Stage 6.3.7 / beta.4.2 alignment-first (AFTER_HEATING_BED / pre-Beacon); limits=%d corrections, %d verifications; inline_print_retry=%s; retry_available=%s retry_used=%s; active_vaoc_context=%s; switch=%s; fault=%s; interrupted=%s; busy=%s; last_error=%s'%(
             self.max_correct,self.max_verify,self.inline_print_retry,v.get('auto_xy_retry_available',0),v.get('auto_xy_retry_used',0),bool(self._retry_context),'ON' if self.enabled() else 'OFF',v.get('auto_xy_fault',0),
             v.get('auto_xy_in_progress',0),self.busy,self.last_error or 'none'))
     def cmd_AUTO_XY_HEALTH(self,gcmd):self.health(gcmd)
@@ -690,6 +784,24 @@ class AutoXYGate:
                 self.active_print_mode='INDEPENDENT'
         if mode=='IDLE' and self.sts('print_stats')['state'] in ('printing','paused'):
             raise gcmd.error('Manual Auto XY only allowed while idle')
+        # Missing initial homing is a prerequisite, NOT a calibration failure.
+        # Check before setting busy, creating a report, saving IN_PROGRESS,
+        # starting VAOC, moving, or writing offsets. Do not auto-home because
+        # a G28 may have physical consequences beyond the camera envelope.
+        # An already latched fault was deliberately checked ABOVE this guard;
+        # losing homing during an active run remains a hard failure in ensure_ok.
+        if not self._retry_precommitted:
+            homed=str(self.sts('toolhead').get('homed_axes',''))
+            if not all(axis in homed for axis in 'xyz'):
+                self.last_error='Printer must be homed first'
+                if mode=='IDLE':
+                    gcmd.respond_info('AUTO XY: Printer must be homed first (G28). No calibration started; no fault latched.')
+                    return
+                # Never silently bypass calibration on a two-tool PRINT:
+                # stop START_PRINT with a normal G-code error, without a
+                # persistent Auto XY fault or an interrupted-run marker.
+                self.active_print_mode=None
+                raise gcmd.error('AUTO XY: Printer must be homed first (G28). Print start stopped; no Auto XY fault latched.')
         if mode=='IDLE':
             try:
                 self.check_camera_temps()
@@ -794,6 +906,9 @@ class AutoXYGate:
             self.report['camera_disagreement_percent']=[round(q*100,3) for q in discrepancy]
             self.save_report()
             self.select(0)
+            # Capture and compare independent tool-change sequences before
+            # permitting the first offset write or any response-gain test.
+            self.settle_toolshifts(mat,gcmd)
             correction_count=0
             verification_count=0
             streak=0
@@ -808,11 +923,49 @@ class AutoXYGate:
                     cycle,self.max_correct+self.max_verify,err[0],err[1]))
                 if prior_step is not None:
                     response=vecsub(err,previous)
+                    anomalous=[]
                     for i in (0,1):
                         if abs(prior_step[i])>=.015:
                             gain=response[i]/prior_step[i]
+                            if not math.isfinite(gain) or not math.isfinite(response[i]):
+                                raise GateAbort('Offset response invalid: non-finite response')
                             if not (.2<=gain<=2.) or abs(response[i])>.11:
-                                raise GateAbort('Offset response invalid: axis %d gain %.3f'%(i,gain))
+                                anomalous.append((i,gain))
+                    if anomalous:
+                        self.record('response_gain_anomalies',cycle=cycle,
+                            axes=[a for a,g in anomalous],
+                            gains=[g for a,g in anomalous],
+                            before_error_mm=previous,after_error_mm=err,
+                            applied_step_mm=prior_step,
+                            response_mm=response,
+                            measured_alignment_in_tolerance=maximum(err)<=self.tol)
+                        # A gross physical displacement or reverse response
+                        # remains fatal regardless of any apparently good
+                        # isolated alignment photo. Bounds are independent of
+                        # gain; <=0.11 mm observed response is still required.
+                        for axis,gain in anomalous:
+                            if abs(response[axis])>.11 or gain<=0:
+                                raise GateAbort('Offset response invalid: gross/reverse axis %d gain %.3f'%(axis,gain))
+                        # Out of tolerance? Do not write a further correction
+                        # based on an anomalous response. Stop and rollback.
+                        # In tolerance? Confirm two *independent* passes, even
+                        # on later corrections and with both axes anomalous.
+                        if maximum(err)>self.tol:
+                            axis,gain=anomalous[0]
+                            raise GateAbort('Offset response invalid: axis %d gain %.3f; alignment outside tolerance'%(axis,gain))
+                        confirmed=self.confirm_anomalous_alignment(
+                            mat,cycle,err,anomalous,verification_count,gcmd)
+                        verification_count+=2
+                        self.report['measurement_cycles']=cycle
+                        self.report['verification_attempts']=verification_count
+                        self.report['corrections_applied']=correction_count
+                        self.report['status']='CALIBRATED'
+                        self.report['final_error_mm']=confirmed
+                        self.report['final_offsets']=self.offsets()
+                        self.save_report()
+                        err=confirmed
+                        success=True
+                        break
                     prior_step=None
                 action,verification_count,streak=self.classify_measurement(
                     err,correction_count,verification_count,streak)
@@ -862,6 +1015,8 @@ class AutoXYGate:
             self.run_gcode('SAVE_VARIABLE VARIABLE=auto_xy_retry_used VALUE=0')
             self.report['status']='CALIBRATED_AND_VAOC_EXITED'
             self.save_report()
+            if self.report.get('response_gain_recheck_status')=='CONFIRMED_IN_TOLERANCE':
+                gcmd.respond_info('AUTO XY WARNING: unusual offset response but stable in-tolerance alignment confirmed twice; inspect report.json.')
             gcmd.respond_info('AUTO XY: VERIFIED X=%+.5f Y=%+.5f mm after %d adjustment(s), %d verification(s); proceeding.'%(
                 err[0],err[1],correction_count,verification_count))
         except (Exception,KeyboardInterrupt) as exc:

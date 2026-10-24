@@ -71,3 +71,23 @@ git push origin main
 If `git apply --check` fails, do not apply it; the repository differs from the reference beta.2 snapshot. Reconcile manually before proceeding.
 
 Create a **new pre-release tag** `v0.1.0-beta.3`, attach the beta.3 tester-installer ZIP, and label beta.1 as unsafe/superseded due to its historical SAVE_CONFIG issue. Do not move or replace an already-published release tag. Keep beta.2 as historical source, with a note that beta.3 adds retention and the clean-reinstall test flow.
+
+
+## Beta 4.1 owner validation before another public release
+
+Beta 4.1 is a *hardware-test candidate*, not a public-release recommendation.
+Run `python3 test_response_gain_recheck.py` and the existing offline suite,
+then installer `--check` before any installation. Verify no fault and no
+active VAOC state, retain configuration backups, and supervise a single
+manual calibration first. Do not push a new GitHub release/tag until the
+owner verifies the new gain-recheck path on the physical machine.
+Never overwrite or force-push existing beta tags.
+
+
+## Beta 4.2 release-candidate validation (current)
+
+This candidate is derived from the owner's beta.3 GitHub baseline. **Do not tag it or open a public community pre-release until the maintainer has checked the independent print-start report and is satisfied with the available bypass-mode evidence.** Include untested modes honestly in the release notes; do not fabricate a passing test by forcing an unsafe mode. Anomalous-gain remeasurement is only offline-validated.
+
+The Klipper Python extra requires a full `sudo systemctl restart klipper` after install on an **idle, safely recovered printer**, not merely a G-code configuration restart. Review the [owner validation evidence](TESTING.md#beta-42-owner-validation-snapshot-25-october-2026-nz-time).
+
+For an existing beta.3 checkout, copy the candidate source files over the checkout (preserve the hidden `.git` directory), or use the beta.3→beta.4.2 patch after `git apply --check`. **Never force-push or rewrite previous beta release tags.** Once validation is sufficient, create a new pre-release tag `v0.1.0-beta.4.2` and attach the matching installer ZIP.

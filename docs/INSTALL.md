@@ -84,10 +84,11 @@ Turn the system OFF using Mainsail (`AUTO_XY_OFF`) where that macro already exis
 
 ```bash
 cd ~/ratos-vaoc-auto-xy
-python3 -m py_compile auto_xy_gate.py auto_xy_detector.py auto_xy_vision_worker.py install_stage6.py disable_stage6.py printer_cfg_editor.py repair_save_config.py auto_xy_retention.py uninstall_auto_xy.py test_stage6_offline.py test_config_editing.py test_retention_uninstall.py
+python3 -m py_compile auto_xy_gate.py auto_xy_detector.py auto_xy_vision_worker.py install_stage6.py disable_stage6.py printer_cfg_editor.py repair_save_config.py auto_xy_retention.py uninstall_auto_xy.py test_stage6_offline.py test_config_editing.py test_retention_uninstall.py test_response_gain_recheck.py
 python3 test_config_editing.py
 python3 test_retention_uninstall.py
 python3 test_stage6_offline.py
+python3 test_response_gain_recheck.py
 python3 install_stage6.py --check
 ```
 
@@ -107,7 +108,7 @@ The installer:
 - Installs `auto_xy_print.cfg` under `/home/pi/printer_data/config/` and adds a single `[include auto_xy_print.cfg]` **above** the Klipper-generated `SAVE_CONFIG` block (replacing a known old include in place when present). The generated `#*#` data is not modified. Installation refuses unknown content after the block or duplicate includes, and does not write an invalid config.
 - Does **not** edit RatOS-managed macros or saved IDEX toolhead offsets.
 
-Restart Klipper from Mainsail while idle, then in the Mainsail console:
+After successful installation and full recovery from any prior fault, **restart the Klipper service while idle** with `sudo systemctl restart klipper` (a config-only RESTART may not reload the Python extra). Then in the Mainsail console:
 
 ```gcode
 AUTO_XY_HEALTH
@@ -151,3 +152,52 @@ See [RETENTION.md](RETENTION.md). Auto XY launches a background stdlib-only hous
 ## J. Fully uninstall Auto XY and reinstall from scratch
 
 Follow [CLEAN_REINSTALL.md](CLEAN_REINSTALL.md) rather than manually deleting files. Upload the new release **outside** `~/auto_xy` so the uninstaller is not removed while you're using it. All deletion is opt-in and previewable; the tool never deletes RatOS saved offsets. It intentionally leaves them at their last calibrated values.
+
+
+## Beta.4 pre-adjustment settling check (hardware-test candidate)
+
+After live camera-scale calibration, this build requires two consecutive complete
+T0 -> T1 -> T0 references to agree to 0.015 mm on both axes. At most four
+references are permitted. No `VAOC_SET_TOOL` offset writes occur until this
+precondition passes. The report records `settling_checks` and `settling_status`.
+If it fails, do **not** relax the threshold blindly; inspect the captured
+photos, camera mounting, return drift and toolhead positioning. The response gain is still checked for gross/reverse motion, but alignment
+is now the success criterion when two no-write confirmations agree. Keep Auto XY OFF
+for any unsupervised prints until this version is live-validated.
+
+
+## Beta.4.1 marginal response remeasurement (unreleased hardware-test candidate)
+
+The previous owner's hardware test of beta.4 passed settling but then halted
+on a Y response gain 2.078, despite X/Y camera error within tolerance.
+The new code confirms a *small first-write* marginal gain only when two further
+full no-write toolshift measurements independently confirm stable in-tolerance
+alignment and persisted saved offsets. See README for all limits. This is
+**not** a general increase in the response gain safety cap. Carefully inspect
+`response_gain_anomalies`, `response_gain_rechecks` and `response_gain_warning`
+after a supervised run. On any fault leave AUTO XY OFF; verify saved/runtime
+offsets, exit VAOC safely, and acknowledge only after recovery.
+
+
+## Beta.4.2 alignment-first response verification (unreleased hardware-test candidate)
+
+An anomalous gain after **any** correction does not automatically fault if both
+axes are already within ±0.030 mm. The controller logs the unusual response and
+requires **two independent no-write T0/T1/T0 measurements** that stay within
+tolerance, agree within 0.015 mm, retain confirmed offsets and satisfy strict
+T0 return/camera scatter requirements. These use two of the normal six
+verification slots. Gross/reverse response, still-outside-tolerance alignment
+and unstable measurements remain hard stops with the existing rollback path.
+This changes the earlier beta.4.1 *first-write-only* policy. Do not treat a
+passing camera check as proof of actual two-tool printed registration.
+
+After installing, follow a **full** `sudo systemctl restart klipper` with the
+printer safe and idle, then check:
+
+```bash
+sha256sum ~/klipper/klippy/extras/auto_xy_gate.py ~/autoxy_beta4_2_release/auto_xy_gate.py
+ps -eo lstart,args | grep '[k]lippy/klippy.py'
+```
+
+Matching hashes and a recent process start time are required before testing.
+Never restart or run calibration while VAOC/fault recovery is incomplete.

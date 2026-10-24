@@ -52,3 +52,17 @@ Reports and camera JPEGs remain **local** unless you choose to share them. Redac
 ## Acceptance for a broader beta
 
 Proposed minimum: independent successful print-start calibration and physical two-tool alignment on at least several different compatible machines; reproducible single/COPY/MIRROR skip; no incorrect position/offset save; camera failure handled safely; no failure to clear print-start gate; reliable installer checks and rollback. **One owner’s working printer is not sufficient to claim compatibility across the RatRig community.**
+
+
+## Beta 4.2 owner validation snapshot (25 October 2026, NZ time)
+
+**Observed / reported on the owner's RatRig:**
+
+- Unhomed manual invocation correctly prompted for homing; no persistent fault reported.
+- After homing, idle calibration reported `CALIBRATED_AND_VAOC_EXITED`, settling `STABLE` after two checks, one offset write, two verification attempts, final camera errors X `+0.028226 mm`, Y `+0.000779 mm`.
+- Auto XY status afterward: `ON; FAULT=0; IN_PROGRESS=0`.
+- The owner reported an independent IDEX print-start calibration continued through to printing normally.
+
+**Evidence still needed:** the print-start run's own `report.json` has not been inspected; actual printed registration is not measured; physical single-tool T0/T1, COPY and MIRROR bypasses have not been confirmed for beta.4.2; the unusual gain warning path is tested offline but has not been seen on hardware; retention expiry and an actual full purge/reinstall are not hardware-verified.
+
+Do not imply that a print-start report was examined just because the owner observed printing begin. Mark untested cases as **NOT TESTED**, never invent passing results.

@@ -121,6 +121,10 @@ def validate(src):
         raise RuntimeError('Release must contain in-place active-VAOC one-time retry and Mainsail prompt')
     if 'retention_success_images_days: 7' not in proposed or 'retention_failed_images_days: 30' not in proposed or 'retention_reports_days: 90' not in proposed:
         raise RuntimeError('Release must include configured safe calibration history retention')
+    if ('def confirm_anomalous_alignment' not in gate_src
+        or 'response_gain_rechecks' not in gate_src
+        or 'measured_alignment_in_tolerance' not in gate_src):
+        raise RuntimeError('Release missing guarded alignment-first no-write response confirmation')
     if 'def _retention_tick' not in gate_src:
         raise RuntimeError('Release missing standalone retention timer')
     if not re.search(r'(?m)^max_corrections:\s*10\s*$',proposed):

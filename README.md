@@ -2,7 +2,7 @@
 
 **Experimental automatic T0/T1 XY nozzle alignment for RatOS 2.1 IDEX printers using a fixed VAOC camera.**
 
-**Version:** `v0.1.0-beta.3` (code baseline: Stage 6.3.7) · **Status:** Community testing; **not an official RatOS/RatRig project**.
+**Version:** `v0.1.0-beta.4.2` (code baseline: Stage 6.3.7 + settling and alignment-first response verification) · **Status:** Owner-validated release candidate; community testing requires supervised commissioning; **not an official RatOS/RatRig project**.
 
 > **Installer safety fix (beta.2 and later):** A community tester identified that beta.1 could append an `[include]` after Klipper's generated `SAVE_CONFIG` block, risking loss of auto-saved settings and future `SAVE_CONFIG` errors. **Do not use beta.1 installer.** This release inserts includes above `SAVE_CONFIG`, patches the disable script, and provides an explicit read-only check/repair tool. If you already installed beta.1, read [Existing-install repair](docs/INSTALL.md#b1-fixing-a-previous-beta1-install) before upgrading.
 
@@ -26,6 +26,20 @@ The camera processing runs in a separate Python environment; a custom Klipper ga
 The master `AUTO_XY_TOGGLE` and `AUTO_XY_STATUS` controls appear in Mainsail's Macros panel. Bypassing does **not** discard your saved offsets. **A latched safety fault must still be addressed; turning calibration OFF is not a fault override.**
 
 The slicer must send accurate `TOTAL_TOOLSHIFTS` to RatOS. A missing parameter is treated as zero and can wrongly skip a real two-tool job. Do not assume carriage mode at the later camera hook reflects the original job mode: RatOS temporarily changes it during startup.
+
+### Pre-adjustment toolshift settling (new in beta.4)
+
+After measuring live camera scale, **before the first offset write**, the gate runs complete camera-observed `T0 -> T1 -> T0` tool-change sequences. Two consecutive sequences must agree within **0.015 mm on each axis**. If not, it tries up to **four** sequences; a persistent mismatch fails the calibration closed, without changing saved offsets. This check is logged in `report.json` as `settling_checks` and `settling_status`, independently of the ten correction and six verification budgets.
+
+Post-correction response is still recorded and checked for gross/reverse movement, but **verified final XY alignment is the success criterion**. A stable initial tool change does not prove a subsequent saved offset write was applied correctly. Settling takes additional camera captures and time.
+
+### Alignment-first response verification (new in beta.4.2 test build)
+
+The controller **does not fail solely because a response-gain ratio exceeds 2.0** when the resulting measured X **and** Y errors are within **±0.030 mm**. This applies after **any correction**, not just the first. An unusual response is recorded in `response_gain_anomalies` and triggers **two additional complete T0 → T1 → T0 camera measurements without writing further offsets**. Both repeat measurements must independently be within ±0.030 mm, agree within **0.015 mm** with the preceding result, have T0 return drift and camera scatter ≤0.015 mm, and show the exact expected persisted offset values. They use two of the normal six verification slots. Only then can the run complete and exit VAOC, with a prominent diagnostic `response_gain_warning`.
+
+**The safety guards remain:** an observed response exceeding **0.11 mm**, reverse direction (non-positive gain), anomalous result still outside alignment tolerance, unstable repeat measurements, changed saved offsets, camera/temperature/position failures, or insufficient verification budget all fail closed and require safe VAOC recovery. Up to ten offset adjustments, a 0.05 mm maximum step, a 0.30 mm maximum cumulative adjustment, and the existing rollback and print gating remain unchanged. An in-tolerance camera result is not proof of mechanical accuracy; inspect warnings and confirm printed registration before wider use. The owner has now completed one successful supervised idle calibration and one successful automatic independent-IDEX print-start-to-printing run on the RatRig. The unusual-gain warning/remeasurement branch has **offline simulation coverage only**, and printed XY registration and mode bypasses require additional validation.
+
+This build also includes the friendly **“Printer must be homed first (G28)”** prerequisite check from the Beta 4.1 homing test build. It does not home automatically or bypass faults after VAOC begins.
 
 ### Automatic image and report retention (new in beta.3)
 
@@ -53,7 +67,8 @@ Use `uninstall_auto_xy.py --check` to preview a safe software uninstall. The `--
 | Parameter | Limit |
 |---|---|
 | Alignment target | ±0.030 mm per axis (camera-measured) |
-| Success criterion | Two consecutive in-tolerance checks |
+| Pre-adjustment settling | Two agreeing full T0/T1/T0 measurements ≤0.015 mm difference, at most four checks |
+| Success criterion | Two consecutive in-tolerance checks; anomalous but bounded responses need two independent no-write confirmations |
 | Adjustments | Up to 10 **per attempt** |
 | Verification-only checks | Up to 6 **per attempt** |
 | Correction per axis per adjustment | 0.050 mm |
@@ -93,13 +108,15 @@ Run these **on your printer Pi only**, after confirming the prerequisites and ba
 ```bash
 cd ~/ratos-vaoc-auto-xy   # directory where you cloned or uploaded THIS repository
 python3 test_stage6_offline.py
+python3 test_response_gain_recheck.py
+python3 test_homing_preflight.py
 python3 install_stage6.py --check   # read-only check; must PASS
 python3 install_stage6.py --install # only if check PASS and printer safely idle
 ```
 
 Do **not** run the installer on GitHub's CI host or a random Linux PC. The installer copies files into Klipper and adds one local include to `printer.cfg`; it does not modify RatOS-managed macros. You must separately prepare `~/auto-xy-venv` for the image worker as described in [INSTALL](docs/INSTALL.md).
 
-After restarting Klipper, use Mainsail:
+After installation, while idle and with VAOC fully exited, perform a **full Klipper service restart** (`sudo systemctl restart klipper`). The G-code `RESTART` alone may re-read config without reloading the Python extra. Then use Mainsail:
 
 ```gcode
 AUTO_XY_HEALTH
@@ -119,3 +136,7 @@ The offline test suite exercises normal execution and failure paths but **does n
 ## License and relationship
 
 This repository includes a proposed **GPL-3.0 license** suitable for a Klipper-oriented community project. The repository owner should verify the license decision and contributor rights before publishing. Dependencies and upstream RatOS/Klipper retain their own licenses. **Not affiliated with or endorsed by RatRig, RatOS, Klipper, Beacon, or Mainsail.**
+
+### Calibration requested before homing (Beta 4.1 test update)
+
+If `AUTO_XY_RUN_NOW` is called with any XYZ axis unhomed, it now prints `Printer must be homed first (G28)` and returns without a calibration fault, motion, or offset changes. Home normally using your printer's safe RatOS homing procedure, then retry manually. An unhomed dual-tool print start still **stops the print**, but no persistent Auto XY fault is latched for this preflight-only condition. Loss of homing during calibration is still a hard fault.

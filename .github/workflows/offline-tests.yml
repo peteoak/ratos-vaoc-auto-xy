@@ -20,13 +20,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Compile all source files
-        run: python -m py_compile auto_xy_gate.py auto_xy_detector.py auto_xy_vision_worker.py install_stage6.py disable_stage6.py check_last_failure.py test_stage6_offline.py printer_cfg_editor.py repair_save_config.py test_config_editing.py auto_xy_retention.py uninstall_auto_xy.py test_retention_uninstall.py
+        run: python -m py_compile auto_xy_gate.py auto_xy_detector.py auto_xy_vision_worker.py install_stage6.py disable_stage6.py check_last_failure.py test_stage6_offline.py printer_cfg_editor.py repair_save_config.py test_config_editing.py auto_xy_retention.py uninstall_auto_xy.py test_retention_uninstall.py test_response_gain_recheck.py test_homing_preflight.py
       - name: Regression test SAVE_CONFIG-safe installer and rollback
         run: python test_config_editing.py
       - name: Test safe retention and clean-uninstall/reinstall
         run: python test_retention_uninstall.py
       - name: Run simulated Klipper / failure-handling tests
         run: python test_stage6_offline.py
+      - name: Test alignment-first bounded gain remeasurement
+        run: python test_response_gain_recheck.py
+      - name: Test no-fault homing prerequisite and mid-run safety
+        run: python test_homing_preflight.py
       - name: Check no private test-run artifacts are committed
         run: |
           if find . -type f \( -name 'ratos-variables.cfg' -o -name 'printer.cfg' -o -name '*.jpg' -o -name '*.png' \) | grep -q .; then
