@@ -2,7 +2,7 @@
 # GPLv3-compatible extension: no third-party dependencies in Klipper Python.
 # Camera/OpenCV execution occurs in a separate venv subprocess while the
 # Klipper reactor is yielded, so MCU communications remain serviced.
-import json, math, os, subprocess, time, logging
+import json, math, os, subprocess, time, logging, sys
 
 class GateAbort(Exception):
     pass
@@ -62,6 +62,16 @@ class AutoXYGate:
         self.timeout=config.getfloat('snapshot_timeout',7.,above=2.,maxval=12.)
         self.max_camera_nozzle_temp=config.getfloat('max_camera_nozzle_temp',155.,above=100.,maxval=175.)
         self.max_camera_target_temp=config.getfloat('max_camera_target_temp',150.,above=100.,maxval=175.)
+        # Persistent log/image retention is independent of the calibration state.
+        self.retention_success_days=config.getint('retention_success_images_days',7,minval=1,maxval=3650)
+        self.retention_failed_days=config.getint('retention_failed_images_days',30,minval=1,maxval=3650)
+        self.retention_report_days=config.getint('retention_reports_days',90,minval=1,maxval=3650)
+        if not (self.retention_success_days <= self.retention_failed_days <= self.retention_report_days):
+            raise config.error('Require success image days <= failure image days <= report days')
+        self._retention_proc=None
+        # Klipper reactor timer only launches a stdlib-only maintenance process
+        # when printer is idle. Never runs or blocks a camera measurement.
+        self.reactor.register_timer(self._retention_tick, self.reactor.monotonic()+300.)
         self.temp_guard_active=False
         self.busy=False
         self._retry_precommitted=False
@@ -75,6 +85,32 @@ class AutoXYGate:
         self.gcode.register_command('AUTO_XY_GATE',self.cmd_AUTO_XY_GATE,desc=self.cmd_AUTO_XY_GATE_help)
         self.gcode.register_command('AUTO_XY_HEALTH',self.cmd_AUTO_XY_HEALTH,desc=self.cmd_AUTO_XY_HEALTH_help)
         self.gcode.register_command('AUTO_XY_RETRY_ONCE',self.cmd_AUTO_XY_RETRY_ONCE,desc=self.cmd_AUTO_XY_RETRY_ONCE_help)
+
+    def _retention_tick(self, eventtime):
+        interval=24*3600.
+        try:
+            if self.busy:
+                return eventtime+3600.
+            stats=self.sts('print_stats')
+            if str(stats.get('state','')).lower() in ('printing','paused'):
+                return eventtime+3600.
+            sd=self.printer.lookup_object('virtual_sdcard',None)
+            if sd and sd.get_status(eventtime).get('is_active',False):
+                return eventtime+3600.
+            if self._retention_proc and self._retention_proc.poll() is None:
+                return eventtime+3600.
+            script=os.path.join(os.path.dirname(self.worker),'auto_xy_retention.py')
+            if not os.path.isfile(script):
+                logging.warning('Auto XY retention worker missing: %s',script)
+                return eventtime+interval
+            self._retention_proc=subprocess.Popen([sys.executable,script,'--run','--results',self.results,
+                '--success-days',str(self.retention_success_days),
+                '--failed-days',str(self.retention_failed_days),
+                '--report-days',str(self.retention_report_days)],
+                stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,close_fds=True)
+        except Exception:
+            logging.exception('Auto XY retention could not start; calibration continues unchanged')
+        return eventtime+interval
 
     def cmd_AUTO_XY_CAPTURE_MODE(self,gcmd):
         """Capture BOTH original IDEX mode and total toolchanges at START_PRINT.

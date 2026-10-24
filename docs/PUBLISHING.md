@@ -38,7 +38,7 @@ If Git requests identity configuration, set your preferred `user.name` and `user
 
 ## Release candidate
 
-Use GitHub **Releases → Draft a new release**, choose tag `v0.1.0-beta.1`, mark it **Pre-release**, and use a title such as **RatOS Auto XY community beta — Stage 6.3.7**. The attached repository ZIP can act as a source snapshot, but the canonical install instructions should use the versioned GitHub repo/tag so testers all start from the same code. Prefer immutable release tags once testers begin reporting regressions.
+Use GitHub **Releases → Draft a new release**, choose tag `v0.1.0-beta.3`, mark it **Pre-release**, and use a title such as **RatOS Auto XY community beta — Stage 6.3.7**. The attached repository ZIP can act as a source snapshot, but the canonical install instructions should use the versioned GitHub repo/tag so testers all start from the same code. Prefer immutable release tags once testers begin reporting regressions.
 
 Suggested release-note summary:
 
@@ -54,3 +54,20 @@ Suggested release-note summary:
 - Encourage testers to submit small PRs with before/after offline tests, not unexplained changes to temperature or travel guards.
 
 For project governance, see [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+## Updating an existing beta.2 repository on `peteoak`'s GitHub
+
+From the existing local repository clone on Windows, apply the versioned beta.3 patch (if provided), inspect the changes, commit and push to `main`. **Do not reset or force-push the remote branch** just to publish an update.
+
+```bash
+git status
+git apply --check ~/Downloads/AutoXY_beta3_retention_clean_install.patch
+git apply ~/Downloads/AutoXY_beta3_retention_clean_install.patch
+git add -A
+git commit -m "Add safe history retention and clean reinstall utilities (beta.3)"
+git push origin main
+```
+
+If `git apply --check` fails, do not apply it; the repository differs from the reference beta.2 snapshot. Reconcile manually before proceeding.
+
+Create a **new pre-release tag** `v0.1.0-beta.3`, attach the beta.3 tester-installer ZIP, and label beta.1 as unsafe/superseded due to its historical SAVE_CONFIG issue. Do not move or replace an already-published release tag. Keep beta.2 as historical source, with a note that beta.3 adds retention and the clean-reinstall test flow.

@@ -10,6 +10,7 @@ gate=importlib.util.module_from_spec(spec); spec.loader.exec_module(gate)
 class Reactor:
     def monotonic(self):return time.monotonic()
     def pause(self,t):pass
+    def register_timer(self,fn,when):self.timer=(fn,when)
 class G:
     def __init__(self):self.commands={};self.lines=[];self.responses=[]
     def register_command(self,name,fn,desc=''):self.commands[name]=fn

@@ -9,6 +9,7 @@ Klipper, change any calibrated offsets or edit any RatOS-managed cfg files.
 import argparse, json, re, shutil, sys, time
 from pathlib import Path
 from urllib.request import Request,urlopen
+from printer_cfg_editor import install_include, atomic_write_text, PrinterCfgError
 
 HOME=Path('/home/pi')
 CFG=HOME/'printer_data/config'
@@ -20,7 +21,8 @@ HOOK='[gcode_macro _USER_START_PRINT_AFTER_HEATING_BED]'
 EARLY_MODE_HOOK='[gcode_macro _USER_START_PRINT]'
 LEGACY_HOOKS=('[gcode_macro _USER_START_PRINT_BED_MESH]',
               '[gcode_macro _USER_START_PRINT_AFTER_HEATING_EXTRUDER]')
-FILES=('auto_xy_vision_worker.py','auto_xy_detector.py','disable_stage6.py','check_last_failure.py')
+FILES=('auto_xy_vision_worker.py','auto_xy_detector.py','disable_stage6.py',
+       'check_last_failure.py','printer_cfg_editor.py','repair_save_config.py','auto_xy_retention.py','uninstall_auto_xy.py')
 
 
 def live_status():
@@ -117,12 +119,19 @@ def validate(src):
         or 'reusing STILL-ACTIVE VAOC' not in gate_src
         or 'def try_inline_print_retry' not in gate_src):
         raise RuntimeError('Release must contain in-place active-VAOC one-time retry and Mainsail prompt')
+    if 'retention_success_images_days: 7' not in proposed or 'retention_failed_images_days: 30' not in proposed or 'retention_reports_days: 90' not in proposed:
+        raise RuntimeError('Release must include configured safe calibration history retention')
+    if 'def _retention_tick' not in gate_src:
+        raise RuntimeError('Release missing standalone retention timer')
     if not re.search(r'(?m)^max_corrections:\s*10\s*$',proposed):
         raise RuntimeError('Release must configure max_corrections: 10')
     if not re.search(r'(?m)^inline_print_retry:\s*True\s*$',proposed):
         raise RuntimeError('Release must enable exactly one synchronous PRINT retry')
     if not re.search(r'(?m)^max_verifications:\s*6\s*$',proposed):
         raise RuntimeError('Release must configure max_verifications: 6')
+    # Validate configuration transformation *before* any file is installed.
+    # Includes are never allowed below Klipper's SAVE_CONFIG block.
+    install_include(text)
     return text
 
 
@@ -140,6 +149,7 @@ def run():
     print('Current saved offsets:',[saved.get(k) for k in ('idex_xoffset','idex_yoffset','idex_zoffset')])
     print('Existing Stage5 control include:', EXISTING in text)
     print('Existing Stage6 include:', INCLUDE in text)
+    print('SAVE_CONFIG-aware include placement: validated')
     if args.check:
         print('CHECK PASSED. No files changed.')
         return
@@ -156,10 +166,11 @@ def run():
     for f in FILES:shutil.copy2(src/f,DEST/f)
     shutil.copy2(src/'auto_xy_gate.py',KLIPPER)
     shutil.copy2(src/'auto_xy_print.cfg',CFG/'auto_xy_print.cfg')
-    # Idempotent include replacement; keep all other printer.cfg contents.
-    updated=text.replace(EXISTING,INCLUDE)
-    if INCLUDE not in updated: updated=updated.rstrip()+'\n\n'+INCLUDE+'\n'
-    (CFG/'printer.cfg').write_text(updated)
+    # Idempotent, SAVE_CONFIG-aware insertion. Never write beneath #*# header.
+    updated=install_include(text)
+    if updated != text:
+        atomic_write_text(CFG/'printer.cfg',updated)
+    print('printer.cfg include inserted before SAVE_CONFIG (if present).')
     (backup/'INSTALL_RECORD.json').write_text(json.dumps({'backup_dir':str(backup),
        'installed_file':str(KLIPPER),'printer_cfg_before':str(backup/'printer.cfg')},indent=2))
     print('INSTALLED (not yet active until Klipper RESTART).')

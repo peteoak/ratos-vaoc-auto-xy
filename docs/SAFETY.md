@@ -37,3 +37,9 @@ The logs and JPEG images may contain local paths, machine details, firmware vers
 ## Beta policy
 
 No warranty of correctness, hardware safety, print quality or supported model coverage. **A successful image metric is not a substitute for a physical two-tool alignment print.**
+
+## Retention and uninstall safety (beta.3)
+
+Calibration history images are valuable after faults; the new housekeeping deletes completed successful images only after 7 days, completed failed images after 30 days and their reports after 90 days. Unknown or incomplete runs remain available for manual review. Always save relevant files elsewhere before their expiry.
+
+The clean-uninstall utility does not touch the RatOS saved-variable file, which contains your live IDEX offsets. Its full-purge flags are **destructive** for `~/auto_xy` (including all prior saved camera images, scripts, stage histories, and backups stored there) and `~/auto-xy-venv`. See [CLEAN_REINSTALL.md](CLEAN_REINSTALL.md), check the preview first and preserve its timestamped backups outside the deleted tree.

@@ -2,7 +2,9 @@
 
 **Experimental automatic T0/T1 XY nozzle alignment for RatOS 2.1 IDEX printers using a fixed VAOC camera.**
 
-**Version:** `v0.1.0-beta.1` (code baseline: Stage 6.3.7) · **Status:** Community testing; **not an official RatOS/RatRig project**.
+**Version:** `v0.1.0-beta.3` (code baseline: Stage 6.3.7) · **Status:** Community testing; **not an official RatOS/RatRig project**.
+
+> **Installer safety fix (beta.2 and later):** A community tester identified that beta.1 could append an `[include]` after Klipper's generated `SAVE_CONFIG` block, risking loss of auto-saved settings and future `SAVE_CONFIG` errors. **Do not use beta.1 installer.** This release inserts includes above `SAVE_CONFIG`, patches the disable script, and provides an explicit read-only check/repair tool. If you already installed beta.1, read [Existing-install repair](docs/INSTALL.md#b1-fixing-a-previous-beta1-install) before upgrading.
 
 > **Safety / compatibility:** This software moves toolheads near a camera and **writes persistent RatOS IDEX offsets**. A bad image, incompatible printer macro, incorrect camera framing or bad installation can cause a collision or spoil prints. Do not install during a print. Back up first. Observe every commissioning run. This beta is **not universal or guaranteed safe for unattended use**. See [Safety](docs/SAFETY.md).
 
@@ -24,6 +26,27 @@ The camera processing runs in a separate Python environment; a custom Klipper ga
 The master `AUTO_XY_TOGGLE` and `AUTO_XY_STATUS` controls appear in Mainsail's Macros panel. Bypassing does **not** discard your saved offsets. **A latched safety fault must still be addressed; turning calibration OFF is not a fault override.**
 
 The slicer must send accurate `TOTAL_TOOLSHIFTS` to RatOS. A missing parameter is treated as zero and can wrongly skip a real two-tool job. Do not assume carriage mode at the later camera hook reflects the original job mode: RatOS temporarily changes it during startup.
+
+### Automatic image and report retention (new in beta.3)
+
+The Klipper extension periodically launches a separate **standard-library-only** housekeeping process while the printer is **idle** (first check about five minutes after Klipper starts, then roughly daily). It does not interrupt calibration and never changes printer configuration or saved offsets.
+
+- Successful calibration JPEGs: keep **7 days**.
+- Failed calibration JPEGs: keep **30 days**.
+- `report.json` and its run folder: keep **90 days**.
+- Incomplete/unrecognised reports and folders containing unexpected files are **preserved** for manual inspection.
+
+Retention days are configurable in `auto_xy_print.cfg`. Preview what would be removed at any time:
+
+```bash
+python3 ~/auto_xy/stage6/auto_xy_retention.py --check
+```
+
+Manual cleanup (`--run`) is available but normally unnecessary. Old images are **not overwritten** before their retention period. More in [Retention and diagnostics](docs/RETENTION.md).
+
+### Clean uninstall and fresh-install validation (new in beta.3)
+
+Use `uninstall_auto_xy.py --check` to preview a safe software uninstall. The `--uninstall` option removes the printer include and installed Klipper extension and makes timestamped backups **outside** `~/auto_xy`. A separate, explicitly confirmed full-purge option can delete all earlier Auto XY scripts/images and the Auto XY Python venv for a true clean software reinstall. **RatOS's saved IDEX offsets are never reset or erased.** See [Clean reinstall walkthrough](docs/CLEAN_REINSTALL.md).
 
 ### Operating limits (current defaults)
 

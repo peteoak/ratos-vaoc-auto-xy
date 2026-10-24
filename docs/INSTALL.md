@@ -28,6 +28,22 @@ PY
 
 If this fails, configure your VAOC Crowsnest/USB camera first. A webcam visible in your browser is **not** sufficient evidence that the Pi's loopback URL works.
 
+## B1. Fixing a previous beta.1 install
+
+**If you ran v0.1.0-beta.1, check `printer.cfg` before further installation.** Klipper's `SAVE_CONFIG` section must be the **last generated block**, with no ordinary `[include]` lines following it. The original beta.1 installer could append an include after that block. Do not invoke `SAVE_CONFIG` to test this: it can error, rewrite settings or restart Klipper.
+
+With the printer idle, download/extract **beta.2 or later**, then in the extracted source folder on the Pi:
+
+```bash
+python3 repair_save_config.py --check
+```
+
+- `No misplaced Auto XY include`: no repair required. Continue with the standard installer check.
+- `FIX AVAILABLE`: make an independent copy of `printer.cfg`, then use `python3 repair_save_config.py --repair` **only while idle**. The tool copies an additional timestamped backup and relocates **only** a known Auto XY include. It preserves the existing `#*#` values unchanged. Restart Klipper while idle, and verify the loaded saved values in Mainsail before printing.
+- `REPAIR REFUSED`: another unexpected line, ambiguous header or duplicate include is present. **Do not force a rewrite.** Ask for a manual review of the original file and your backup; restoring saved settings requires care.
+
+This tool fixes the specific include-position error; it cannot prove values previously ignored by Klipper have not already been lost or superseded. Inspect prior backups and the active configuration after any repair.
+
 ## B. Get the code and vision dependencies
 
 Option 1: clone the project (after the repository owner has published it):
@@ -38,7 +54,7 @@ git clone https://github.com/OWNER/ratos-vaoc-auto-xy.git
 cd ratos-vaoc-auto-xy
 ```
 
-Replace `OWNER` with the real repository owner. Option 2: download the GitHub Source ZIP and upload its extracted contents to the Pi. The **installer must run from the extracted source directory**, where `install_stage6.py` and `auto_xy_gate.py` are together.
+Replace `OWNER` with the real repository owner (this project currently uses `peteoak`). Option 2: download the GitHub Source ZIP and upload its extracted contents to the Pi. The **installer must run from the extracted source directory**, where `install_stage6.py` and `auto_xy_gate.py` are together.
 
 Install image dependencies in a **separate virtual environment** (not Klipper's Python):
 
@@ -68,7 +84,9 @@ Turn the system OFF using Mainsail (`AUTO_XY_OFF`) where that macro already exis
 
 ```bash
 cd ~/ratos-vaoc-auto-xy
-python3 -m py_compile auto_xy_gate.py auto_xy_detector.py auto_xy_vision_worker.py install_stage6.py test_stage6_offline.py
+python3 -m py_compile auto_xy_gate.py auto_xy_detector.py auto_xy_vision_worker.py install_stage6.py disable_stage6.py printer_cfg_editor.py repair_save_config.py auto_xy_retention.py uninstall_auto_xy.py test_stage6_offline.py test_config_editing.py test_retention_uninstall.py
+python3 test_config_editing.py
+python3 test_retention_uninstall.py
 python3 test_stage6_offline.py
 python3 install_stage6.py --check
 ```
@@ -85,8 +103,8 @@ The installer:
 
 - Backs up `printer.cfg`, prior Auto XY config and prior custom Klipper extension under `/home/pi/auto_xy/stage6_backups/<timestamp>/`.
 - Copies `auto_xy_gate.py` to `/home/pi/klipper/klippy/extras/`.
-- Copies the camera worker/detector and recovery scripts to `/home/pi/auto_xy/stage6/`.
-- Installs `auto_xy_print.cfg` under `/home/pi/printer_data/config/` and adds a single `[include auto_xy_print.cfg]` to `printer.cfg` (replacing a known old include when present).
+- Copies the camera worker/detector, optional retention worker, clean-uninstaller and recovery scripts to `/home/pi/auto_xy/stage6/`.
+- Installs `auto_xy_print.cfg` under `/home/pi/printer_data/config/` and adds a single `[include auto_xy_print.cfg]` **above** the Klipper-generated `SAVE_CONFIG` block (replacing a known old include in place when present). The generated `#*#` data is not modified. Installation refuses unknown content after the block or duplicate includes, and does not write an invalid config.
 - Does **not** edit RatOS-managed macros or saved IDEX toolhead offsets.
 
 Restart Klipper from Mainsail while idle, then in the Mainsail console:
@@ -121,6 +139,15 @@ If it is unsafe or the Klipper config is broken, stop printing. With the printer
 python3 ~/auto_xy/stage6/disable_stage6.py
 ```
 
-(If the version is not yet installed, run the same file from your extracted project folder.) This backs up and removes `[include auto_xy_print.cfg]` from `printer.cfg`, then restores the legacy include when applicable. Restart Klipper while idle. **Disabling the include does not automatically delete, roll back or validate any saved XY offsets**; manually verify the printer's resulting configuration and active compensation before printing.
+(If the version is not yet installed, run the same file from your extracted project folder.) This backs up and removes `[include auto_xy_print.cfg]` from `printer.cfg`, then restores the legacy include when applicable **above the SAVE_CONFIG block**. If an older beta has already misplaced the include, run `repair_save_config.py --check` first; the disable script deliberately refuses to edit a corrupted autosave block. Restart Klipper while idle. **Disabling the include does not automatically delete, roll back or validate any saved XY offsets**; manually verify the printer's resulting configuration and active compensation before printing.
 
 If a new version fails during Klipper startup, you may need to restore the timestamped `printer.cfg` and previous `auto_xy_gate.py` from `/home/pi/auto_xy/stage6_backups` before restarting. Never blindly replace `ratos-variables.cfg` during printing. Seek help if restoring active compensation is unclear.
+
+
+## I. Image/report retention in beta.3
+
+See [RETENTION.md](RETENTION.md). Auto XY launches a background stdlib-only housekeeping process approximately daily while Klipper is idle. The retention defaults are configurable in `auto_xy_print.cfg`, and the process will not touch malformed or incomplete run reports. Preview with `python3 ~/auto_xy/stage6/auto_xy_retention.py --check`.
+
+## J. Fully uninstall Auto XY and reinstall from scratch
+
+Follow [CLEAN_REINSTALL.md](CLEAN_REINSTALL.md) rather than manually deleting files. Upload the new release **outside** `~/auto_xy` so the uninstaller is not removed while you're using it. All deletion is opt-in and previewable; the tool never deletes RatOS saved offsets. It intentionally leaves them at their last calibrated values.
