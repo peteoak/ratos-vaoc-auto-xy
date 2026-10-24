@@ -1,0 +1,26 @@
+# Generated and private printer artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.log
+*.zip
+*.tar.gz
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.mov
+print_gate_runs/
+stage6_backups/
+cycle_runs/
+calibration_runs/
+ratos-variables.cfg
+ratos-variables.*.cfg
+printer.cfg
+*.backup
+*.bak
+.env
+.env.*
+.DS_Store

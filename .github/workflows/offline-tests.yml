@@ -1,0 +1,31 @@
+name: Offline tests (no printer hardware)
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  safety-simulations:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.11']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile all source files
+        run: python -m py_compile auto_xy_gate.py auto_xy_detector.py auto_xy_vision_worker.py install_stage6.py disable_stage6.py check_last_failure.py test_stage6_offline.py
+      - name: Run simulated Klipper / failure-handling tests
+        run: python test_stage6_offline.py
+      - name: Check no private test-run artifacts are committed
+        run: |
+          if find . -type f \( -name 'ratos-variables.cfg' -o -name 'printer.cfg' -o -name '*.jpg' -o -name '*.png' \) | grep -q .; then
+            echo 'Do not commit saved config or camera images.'
+            exit 1
+          fi

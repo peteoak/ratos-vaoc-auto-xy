@@ -1,0 +1,53 @@
+name: Bug report / printer safety problem
+description: Report an unexpected problem in the community beta
+title: '[Bug] '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Stop testing if toolhead motion, offsets or temperature are uncertain.** Do not post saved variables, credentials, private IPs or full printer configs. Redact logs/screenshots.
+  - type: input
+    id: version
+    attributes:
+      label: Auto XY release / commit
+      placeholder: v0.1.0-beta.1 / commit SHA
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: RatOS / Klipper / printer model
+      placeholder: RatOS 2.1, V-Core 4 IDEX, Klipper revision
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Print mode
+      options: [Independent 2-tool, Single T0, Single T1, COPY, MIRROR, Manual calibration, Installation / Klipper startup]
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result and relevant redacted error
+    validations:
+      required: true
+  - type: textarea
+    id: offset
+    attributes:
+      label: Offset writes, fault latch and VAOC state (if known)
+      placeholder: Did this persist any X/Y offsets? Was VAOC active? Did Klipper latch a fault?
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I have removed credentials, private config, addresses and identifying information from what I share.
+          required: true

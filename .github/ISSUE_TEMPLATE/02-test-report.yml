@@ -1,0 +1,67 @@
+name: Community test result
+description: Report a supervised installation or print-mode test
+
+title: '[Test] '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing! This beta is not validated for unattended operation. Do not upload private configs or camera feeds.
+  - type: input
+    id: revision
+    attributes:
+      label: Auto XY version / commit
+      placeholder: v0.1.0-beta.1
+    validations:
+      required: true
+  - type: input
+    id: printer
+    attributes:
+      label: Printer and RatOS version
+      placeholder: V-Core 4 300 IDEX, RatOS 2.1.x
+    validations:
+      required: true
+  - type: input
+    id: camera
+    attributes:
+      label: Camera type and resolution
+      placeholder: USB VAOC / 1920 x 1080 / fixed mount
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Pi OS / CPU architecture / Python and OpenCV versions (if known)
+      placeholder: Raspberry Pi OS ... / aarch64 / Python ... / OpenCV ...
+  - type: dropdown
+    id: printing_mode
+    attributes:
+      label: Job type tested
+      options: [Independent two-tool, Single T0, Single T1, COPY, MIRROR, Master OFF bypass, Camera check only]
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options: [PASS, FAIL, PARTIAL, NOT TESTED]
+    validations:
+      required: true
+  - type: textarea
+    id: info
+    attributes:
+      label: Observations and redacted report summary
+      description: Include toolshift count, camera preheat, alignment result, verification count, print continuation, and any issues. No private IPs/config.
+    validations:
+      required: true
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: Tests completed
+      options:
+        - label: Offline tests passed
+        - label: Installer --check passed
+        - label: Printer remained safely operable
+        - label: Saved offset changes were inspected
+        - label: Printing mode matched expected bypass/calibration
+        - label: Physical two-tool print alignment checked
