@@ -2,15 +2,14 @@
 
 **Hardware-tested development pre-release**, not a stable or universally verified RatOS add-on. Independently maintained; not affiliated with RatRig/RatOS.
 
-This repository snapshot consolidates the current **tested dev5 controller** rather than changing its calibration or movement code. It is intended to replace the old beta README/installer on a review branch, after GitHub publication and licence review. The code automatically aligns the two toolheads using a fixed VAOC camera after bed heatsoak and before later print-start probing, with a native RatOS VAOC fallback. A completed endurance test never authorises printing.
+This repository snapshot consolidates the current **tested dev5 controller** rather than changing its calibration or movement code. It is intended to replace the old beta README/installer on a review branch, after GitHub publication and licence review. The code automatically aligns the two toolheads using a fixed VAOC camera after bed heatsoak and before later print-start probing, with a native RatOS VAOC fallback.
 
 ## What has been tested
 
 - RatRig V-Core 4 300 IDEX, RatOS 2.1, fixed USB VAOC camera, Beacon, physical endstop homing.
 - Supervised **25, 50 and 100 actual tool changes** with two images per measured visit; 100-change run completed 101 visits, 202 images, zero endurance offset writes, no reported MCU fault.
 - Automatic correction and independent verification are reported working on the owner's printer; protected-print and native manual VAOC recovery were also manually tested previously, but not independently reproduced on a second machine.
-- Vision candidate benchmark: 384 archived images; dev5 ROI mode matched dev4 for 380 accepted images with **zero changed precision centres**. Four were rejected by both. The new ROI detector resolved the earlier 150°C ambiguous photograph offline; the successful 100-change run was around 100°C, so no hotter endurance qualification is claimed.
-- An earlier transient Klipper T1 MCU `Timer too close` shutdown was not reproduced in completed dev5 tests; its root cause is not proven.
+- Vision candidate benchmark: 384 archived images
 
 ## Installation: new RatOS 2.1 systems only
 
@@ -33,11 +32,8 @@ sudo systemctl restart klipper
 
 5. Rehome and complete camera commissioning via `scripts/commission_camera.py` and a supervised, first no-write test before enabling automatic corrections or protected printing. **Do not copy nozzle offsets, camera profiles, or config files from another machine.** See `docs/NEW_INSTALL.md`.
 
-*This fresh installer has offline tests, but has NOT been proven in a fresh RatOS installation on a second printer. Publication should label the release as a prerelease.*
+*This fresh installer has offline tests, but has NOT been proven in a fresh RatOS installation on a second printer.
 
-## Already running RC15 dev5 (owner's printer)
-
-**Do not reinstall.** Your already proven controller is the release baseline. To compare its runtime sources with this publication snapshot (read-only):
 
 ```bash
 cd ~/AutoXY_v0.5.0-rc15-dev5_GitHub_Review
