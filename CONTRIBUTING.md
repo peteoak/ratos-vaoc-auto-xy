@@ -1,8 +1,8 @@
-# Contributing to the community beta
+﻿# Contributing to the community beta
 
 Thanks for testing and helping improve compatibility. The safest contributions are **reproducible, small, reviewed changes**.
 
-Before reporting a bug, run `python3 test_stage6_offline.py` against the version you have installed, if your printer is safely idle. Compare your local file revisions with the GitHub release tag.
+Before reporting a bug, run `python3 -m unittest discover -s tests -p 'test_*.py' -v` in a checkout with its Python vision dependencies installed. This runs offline tests only; compare the installed AutoXY version and relevant report excerpts to the published commit.
 
 Please include the printer model, RatOS/Klipper revision, camera resolution/mount/ROI, mode and toolshift count, installer check result, what was expected, what happened, whether any offsets were saved, and **redacted** report excerpts. Use the GitHub test-report template for successful tests and bug-report template for failures.
 
@@ -10,4 +10,4 @@ Pull requests affecting calibration movement, thermal limits, retry/fault handli
 
 PRs should not include personal printer configuration (`printer.cfg`, `ratos-variables.cfg`), remote access secrets, images without consent, or full G-code files that may contain private model data.
 
-The copyright/license statement is proposed as GPL-3.0. Contributors should review it before submitting contributions. Contributions are not guaranteed to be accepted without review, especially when they widen supported hardware claims.
+Review the repository GPL-3.0 licence and THIRD_PARTY_NOTICES.md before submitting contributions. Adapted upstream RatOS macro attribution remains under review. Contributions are not guaranteed to be accepted without review, especially when they widen supported hardware claims.

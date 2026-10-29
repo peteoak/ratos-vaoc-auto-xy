@@ -3,3 +3,13 @@
 *.md text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+
+# Preserve checksum-verified RC15 dev5 snapshot bytes; inherited trailing spaces.
+config/auto_xy_macros.cfg -whitespace
+scripts/upgrade_rc15_dev4_to_dev5.py -whitespace
+
+src/auto_xy_gate.py -whitespace
+
+tests/fixtures/dev3_gate.py -whitespace
+
+tests/fixtures/dev4_gate.py -whitespace

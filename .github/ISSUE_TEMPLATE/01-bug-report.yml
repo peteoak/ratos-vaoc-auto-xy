@@ -1,4 +1,4 @@
-name: Bug report / printer safety problem
+﻿name: Bug report / printer safety problem
 description: Report an unexpected problem in the community beta
 title: '[Bug] '
 body:
@@ -10,7 +10,7 @@ body:
     id: version
     attributes:
       label: Auto XY release / commit
-      placeholder: v0.1.0-beta.1 / commit SHA
+      placeholder: v0.5.0-rc15-dev5 / commit SHA
     validations:
       required: true
   - type: input

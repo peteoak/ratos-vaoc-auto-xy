@@ -1,3 +1,4 @@
-# Camera/image worker only. Install into ~/auto-xy-venv, NEVER Klipper's env.
-numpy==1.26.4
-opencv-python-headless==4.11.0.86
+# Compatibility ranges; NOT a validated multi-architecture lockfile.
+# Install ONLY in isolated /home/pi/auto-xy-venv on a supported target.
+numpy>=1.24,<3
+opencv-python-headless>=4.8,<5
