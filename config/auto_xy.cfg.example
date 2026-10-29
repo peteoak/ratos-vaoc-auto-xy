@@ -1,0 +1,132 @@
+# Copy to printer_data/config/auto_xy.cfg; retain the stock camera URL on stock RatOS
+# and commission the image ROI/focus/lighting and thermal settings for this machine.
+# This is a commissioning example, not a printer-independent safe geometry.
+# Initial setup REQUIRED: perform a successful native manual RatOS VAOC first,
+# then commission the AutoXY camera image profile in the same homed session,
+# then run AUTO_XY_RUN_NOW for the first time (supervised, preferably no-write).
+# See docs/REQUIREMENTS.md; do not disable motors, rehome or print between.
+# Enable protected prints and automatic correction only after validation.
+# Never put idex_xoffset/idex_yoffset/idex_zoffset in this file.
+
+# AutoXY v0.5.0-rc15-dev5 RatOS 2.1 configuration example AFTER bed heatsoak, BEFORE Beacon contact probing at 170 C.
+# Mainsail automatically displays each non-underscore macro as a button, including AUTO_XY_TOGGLE.
+# OFF by default. Existing saved XY tool offsets are used unchanged when OFF.
+# Put only the [auto_xy_gate] settings in this file. User control macros are
+# maintained in auto_xy_macros.cfg; do not duplicate those macros here.
+
+[auto_xy_gate]
+python: /home/pi/auto-xy-venv/bin/python
+worker: /home/pi/auto_xy/vision/auto_xy_vision_worker.py
+results: /home/pi/auto_xy/print_gate_runs
+camera_url: http://127.0.0.1:8080/?action=snapshot
+# Stock RatOS 2.1 VAOC USB alias is /dev/RatOS/rr-vaoc-camera.
+# RatOS normally exposes camera-streamer on port 8080. Verify its live snapshot
+# with scripts/verify_stock_camera.py; do not confuse the device path with the URL.
+# AutoXY scans the full camera frame in first-use commissioning without
+# assuming the nozzle is located at the original developer's screen centre.
+# It FAILS CLOSED if several plausible rims are present. Prefer a tighter
+# image crop if reflections, fasteners or background objects create ambiguity.
+# A stock nozzle still needs a plausible visible rim radius and good lighting.
+roi: auto
+camera_registration_enabled: False
+# RC14 experiments. Keep original until supervised comparison completes.
+settling_path: original
+# Alternative experimental modes (not auto-enabled): diagonal, dogleg
+# The second stationary picture retains RC13's original 0.80-second wait.
+camera_pair_gap: 0.80
+# Fast vision modes are opt-in AFTER camera commissioning; default safe legacy.
+# Options: legacy, two_stage, two_stage_roi (faster cropped mode).
+camera_detector_mode: legacy
+# Options: legacy, persistent. Persistent worker avoids per-image Python startup.
+camera_worker_mode: persistent
+# Optional per-capture diagnostic timings.
+camera_diagnostics_enabled: False
+# Opt-in commissioned nozzle-position and radius guard (requires photo profile).
+commissioned_detector_guard: False
+# Must remain False during measure-only movement trials. Do not opt in to
+# experimental automatic offset writes before real printer qualification.
+allow_experimental_alignment_writes: False
+protected_print_enabled: False
+tolerance: 0.030
+# Before ANY offset changes: run T0 -> T1 -> T0 camera measurements
+# until two consecutive readings agree within 0.015 mm, or abort after 4.
+preflight_settling_checks: 4
+preflight_settling_tolerance: 0.015
+# An unusual but bounded response gain after ANY correction can be
+# confirmed with two extra full T0/T1/T0 no-write measurements ONLY when
+# measured X and Y are already within tolerance. Gross/reversed responses,
+# instability or insufficient verification budget still fail closed.
+max_corrections: 10
+# No-write, in-tolerance verification checks per calibration (two consecutive to pass).
+max_verifications: 6
+# Protected-print recovery uses held virtual-SD with one guarded retry and
+# native manual VAOC. Legacy inline retry intentionally DISABLED.
+inline_print_retry: False
+max_step: 0.050
+# Conservative first Y correction; configurable per machine (max 0.050 mm).
+first_y_max_step: 0.020
+max_total_change: 0.300
+settle: 0.80
+snapshot_timeout: 7.0
+# Thermal mode is RATOS BY DEFAULT to protect existing, hardware-validated
+# installations. Opt-in slicer_derived mode: subtract 50 C independently from
+# T0 and T1 EXTRUDER_OTHER_LAYER_TEMP (e.g. 210,245 => 160,195 C).
+# Both tools may have DIFFERENT actual camera temperatures. 50 C lower does
+# NOT guarantee the polymer is solid or prevent oozing; validate each filament.
+# Explicitly raise BOTH camera caps for higher targets before using this mode;
+# the installer never silently raises an existing user's temperature limits.
+# Require photo-only commissioning using the actual installed VAOC camera
+# before enabling automatic writes (and measure-only gate).
+commission_required: True
+# Fresh machine must have operator-confirmed native manual VAOC in the commissioning profile.
+manual_vaoc_confirmation_required: True
+commission_profile: /home/pi/auto_xy/camera_commission.json
+thermal_mode: ratos
+# Supported strategy values: ratos (native configured preheat), slicer_derived
+# (slicer T0/T1 printing temperature minus separate configurable reduction).
+# A native Mainsail dropdown and fixed absolute-temperature strategy are NOT
+# implemented in this RC; never assume those are supported by Klipper.
+thermal_reduction_t0: 50.0
+thermal_reduction_t1: 50.0
+thermal_stability_band_c: 2.0
+thermal_stable_seconds: 5.0
+thermal_wait_seconds: 300.0
+# When enabled, both M104 targets are temporarily managed after heatsoak,
+# before VAOC; original RatOS targets are restored at the end (even on abort).
+# Requiring equal nozzle temperatures is incompatible with different slicer
+# temps unless the computed targets happen to match.
+
+# Keep existing RatOS preheat (normally 150 C) during camera calibration.
+# Abort if measured temperature rises above max_camera_nozzle_temp or if
+# a target above max_camera_target_temp is set, including during measurement.
+# 150 C can still ooze despite being below nominal extrusion temperature: supervise initial runs.
+max_camera_nozzle_temp: 155.0
+max_camera_target_temp: 150.0
+# Up to 90 seconds for a nozzle previously scrubbed hotter than 155C to
+# cool, without motion or heater commands. Above-target commands refuse immediately.
+preflight_thermal_wait_seconds: 90.0
+# For temperature-matched measurements, first configure RatOS to preheat
+# BOTH nozzles; otherwise enabling this will intentionally block calibration.
+# Default OFF to retain the owner's previously tested T0/T1 heating behaviour.
+require_matched_camera_temps: False
+camera_temp_pair_tolerance: 2.0
+# OPTIONAL: reuse a completely verified calibration at the next eligible
+# independent IDEX START_PRINT only when it is STILL valid at print capture
+# and again after heatsoak. Opt-in via AUTO_XY_REUSE_ON. Defaults to OFF.
+# This is never a persistent saved "calibrated" flag; a Klipper restart,
+# rehome or motor disable invalidates proof. A significant thermal change
+# causes normal recalibration even when motors remain enabled. Calibrate
+# close to your actual printing bed/nozzle temperatures for reuse to work.
+reuse_max_bed_temp_delta: 5.0
+reuse_max_nozzle_temp_delta: 10.0
+
+# Image retention: successful runs 7 days, failed runs 30 days,
+# report.json 90 days. Cleanup runs while Klipper is idle (about daily).
+retention_success_images_days: 7
+retention_failed_images_days: 30
+retention_reports_days: 90
+
+
+# Exactly ONE include in printer.cfg: [include auto_xy.cfg].
+# The following includes all AutoXY controls, camera helpers and print protection.
+[include auto_xy_macros.cfg]

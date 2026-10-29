@@ -1,4 +1,4 @@
-name: Community test result
+﻿name: Community test result
 description: Report a supervised installation or print-mode test
 
 title: '[Test] '
@@ -11,7 +11,7 @@ body:
     id: revision
     attributes:
       label: Auto XY version / commit
-      placeholder: v0.1.0-beta.1
+      placeholder: v0.5.0-rc15-dev5
     validations:
       required: true
   - type: input
