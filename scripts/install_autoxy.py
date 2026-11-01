@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AutoXY v0.5.0 RC15 dev5: guarded fresh-only installer (new users).
+"""AutoXY v0.5.0 RC15 dev6: guarded fresh-only installer (new users).
 
 Safe by default: --check only reads; --install never changes RatOS saved offsets.
 Only use --install after separately reviewing preflight results, with a cool,
@@ -20,7 +20,7 @@ from pathlib import Path
 import ratos_extension
 from urllib.request import Request, urlopen
 
-VERSION = '0.5.0-rc15-dev5'
+VERSION = '0.5.0-rc15-dev6'
 HOME = Path('/home/pi')
 EXPECTED_RC7 = {
     'auto_xy/klipper/auto_xy_gate.py':'9c67c41059a6e234f9a2630c76a5d4ebf070ecb32434509366a1af19bcc77cdc',
@@ -475,7 +475,7 @@ def main():
     if a.check:
         print('CHECK PASSED; NO FILES CHANGED')
     else:
-        require(a.confirm=='INSTALL_RC15_DEV5_FRESH','Installation requires --confirm INSTALL_RC15_DEV5_FRESH')
+        require(a.confirm=='INSTALL_RC15_DEV6_FRESH','Installation requires --confirm INSTALL_RC15_DEV6_FRESH')
         folder=install(home,changes,mode,offsets)
         print('AutoXY',VERSION,'installed; rollback:',folder)
         if mode in ('fresh','clean-reinstall'):
