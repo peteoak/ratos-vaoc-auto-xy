@@ -5,7 +5,7 @@
 # Klipper reactor is yielded, so MCU communications remain serviced.
 import json, math, os, subprocess, time, logging, sys, csv, io, html
 
-RELEASE_VERSION = "0.5.0-rc15-dev5"
+RELEASE_VERSION = "0.5.0-rc15-dev6"
 
 class GateAbort(Exception):
     pass
@@ -172,12 +172,19 @@ class AutoXYGate:
         self.retention_success_days=config.getint('retention_success_images_days',7,minval=1,maxval=3650)
         self.retention_failed_days=config.getint('retention_failed_images_days',30,minval=1,maxval=3650)
         self.retention_report_days=config.getint('retention_reports_days',90,minval=1,maxval=3650)
-        if not (self.retention_success_days <= self.retention_failed_days <= self.retention_report_days):
-            raise config.error('Require success image days <= failure image days <= report days')
+        self.retention_diagnostic_days=config.getint('retention_diagnostic_images_days',7,minval=1,maxval=3650)
+        self.retention_exports_days=config.getint('retention_diagnostic_exports_days',30,minval=1,maxval=3650)
+        if not (self.retention_success_days <= self.retention_failed_days <= self.retention_report_days and
+                self.retention_diagnostic_days <= self.retention_report_days and
+                self.retention_exports_days <= self.retention_report_days):
+            raise config.error('Image/export retention periods must be <= report retention period')
+        self.retention_mib={kind:config.getint('retention_max_'+kind+'_mib',default,minval=1,maxval=102400)
+            for kind,default in (('success_images',256),('failed_images',512),
+                                 ('diagnostic_images',512),('reports',128),('exports',128))}
         self._retention_proc=None
-        # Klipper reactor timer only launches a stdlib-only maintenance process
-        # when printer is idle. Never runs or blocks a camera measurement.
-        self.reactor.register_timer(self._retention_tick, self.reactor.monotonic()+300.)
+        # Nonblocking cleanup independent of camera/motion. Initial check after
+        # five minutes; completion reschedules an earlier idle-only check.
+        self._retention_timer=self.reactor.register_timer(self._retention_tick, self.reactor.monotonic()+300.)
         self.temp_guard_active=False
         self.busy=False
         self._retry_precommitted=False
@@ -349,27 +356,35 @@ class AutoXYGate:
         return self.flag('auto_xy_v2_reuse_enabled')
 
     def _retention_tick(self, eventtime):
-        interval=24*3600.
+        interval=15*60.
         try:
-            if self.busy:
-                return eventtime+3600.
+            # No deletion while VAOC/recovery, a print, or AutoXY is active.
+            if self.busy or self.sts('gcode_macro _VAOC').get('is_started') or self.flag('auto_xy_v2_in_progress'):
+                return eventtime+interval
             stats=self.sts('print_stats')
             if str(stats.get('state','')).lower() in ('printing','paused'):
-                return eventtime+3600.
+                return eventtime+interval
             sd=self.printer.lookup_object('virtual_sdcard',None)
             if sd and sd.get_status(eventtime).get('is_active',False):
-                return eventtime+3600.
+                return eventtime+interval
             if self._retention_proc and self._retention_proc.poll() is None:
-                return eventtime+3600.
+                return eventtime+interval
+            if self._retention_proc and self._retention_proc.returncode not in (None,0):
+                logging.warning('Auto XY retention worker exited unsuccessfully; review storage')
             script=os.path.join(os.path.dirname(self.worker),'auto_xy_retention.py')
             if not os.path.isfile(script):
                 logging.warning('Auto XY retention worker missing: %s',script)
                 return eventtime+interval
-            self._retention_proc=subprocess.Popen([sys.executable,script,'--run','--results',self.results,
-                '--success-days',str(self.retention_success_days),
-                '--failed-days',str(self.retention_failed_days),
-                '--report-days',str(self.retention_report_days)],
-                stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,close_fds=True)
+            args=[sys.executable,script,'--run','--results',self.results,
+                  '--success-days',str(self.retention_success_days),
+                  '--failed-days',str(self.retention_failed_days),
+                  '--diagnostic-days',str(self.retention_diagnostic_days),
+                  '--exports-days',str(self.retention_exports_days),
+                  '--report-days',str(self.retention_report_days)]
+            for kind,limit in self.retention_mib.items():
+                args.extend(['--max-'+kind.replace('_','-')+'-mib',str(limit)])
+            self._retention_proc=subprocess.Popen(args,stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,close_fds=True)
         except Exception:
             logging.exception('Auto XY retention could not start; calibration continues unchanged')
         return eventtime+interval
@@ -2155,6 +2170,11 @@ class AutoXYGate:
             self.busy=False
             self.temp_guard_active=False
             self.phase='IDLE'
+            # Check new-run storage soon after the gate exits. The timer itself
+            # refuses cleanup while VAOC/retry or printing is in progress.
+            if self.directory:
+                try:self.reactor.update_timer(self._retention_timer,self.reactor.monotonic()+120.)
+                except Exception:logging.exception('Auto XY retention scheduling failed (nonfatal)')
             if not self._retry_precommitted:
                 # Keep thermal ownership across an inline attempt, then restore
                 # RatOS's original targets at the outermost gate exit.
