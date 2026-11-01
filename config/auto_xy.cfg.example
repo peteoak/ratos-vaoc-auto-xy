@@ -8,7 +8,7 @@
 # Enable protected prints and automatic correction only after validation.
 # Never put idex_xoffset/idex_yoffset/idex_zoffset in this file.
 
-# AutoXY v0.5.0-rc15-dev5 RatOS 2.1 configuration example AFTER bed heatsoak, BEFORE Beacon contact probing at 170 C.
+# AutoXY v0.5.0-rc15-dev6 RatOS 2.1 configuration example AFTER bed heatsoak, BEFORE Beacon contact probing at 170 C.
 # Mainsail automatically displays each non-underscore macro as a button, including AUTO_XY_TOGGLE.
 # OFF by default. Existing saved XY tool offsets are used unchanged when OFF.
 # Put only the [auto_xy_gate] settings in this file. User control macros are
@@ -120,11 +120,21 @@ camera_temp_pair_tolerance: 2.0
 reuse_max_bed_temp_delta: 5.0
 reuse_max_nozzle_temp_delta: 10.0
 
-# Image retention: successful runs 7 days, failed runs 30 days,
-# report.json 90 days. Cleanup runs while Klipper is idle (about daily).
+# Image and diagnostic retention v2. Oldest eligible files removed once
+# EITHER the age OR the independent size budget is reached, while idle only.
+# All limits are MiB (1 MiB = 1,048,576 bytes). The latest run and two most
+# recent failed runs are protected from quota eviction, but not age expiry.
+# Unknown/unreadable runs are retained; inspect retention dry-run warnings.
 retention_success_images_days: 7
 retention_failed_images_days: 30
+retention_diagnostic_images_days: 7
+retention_diagnostic_exports_days: 30
 retention_reports_days: 90
+retention_max_success_images_mib: 256
+retention_max_failed_images_mib: 512
+retention_max_diagnostic_images_mib: 512
+retention_max_reports_mib: 128
+retention_max_exports_mib: 128
 
 
 # Exactly ONE include in printer.cfg: [include auto_xy.cfg].
