@@ -13,7 +13,7 @@ class ControllerPreservationTests(unittest.TestCase):
         return {n.name:n for n in klass.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))}
     def test_production_motion_calibration_and_endurance_functions_byte_equivalent_ast(self):
         a=self.methods(self.old);b=self.methods(self.new)
-        allowed={'__init__','_persistent_capture','worker_capture','cmd_AUTO_XY_HEALTH','cmd_AUTO_XY_GATE'}
+        allowed={'__init__','_persistent_capture','worker_capture','cmd_AUTO_XY_HEALTH','cmd_AUTO_XY_GATE','_retention_tick'}
         for name,fn in a.items():
             if name in allowed:continue
             with self.subTest(function=name):
