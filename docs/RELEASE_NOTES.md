@@ -1,11 +1,7 @@
-# Suggested GitHub pre-release notes — v0.5.0-rc15-dev5
+# AutoXY v0.5.0-rc15-dev6 — retention release candidate
 
-This is a community feedback **pre-release**, not stable or multi-machine verified.
+Change since dev5: storage reclamation for successful (7d), failed (30d), diagnostic (7d), export (30d), and report (90d) artifacts; independent caps; terminal-run-only inventory; conservative file identity checks and skip-on-error behavior. A preview-only command is provided. Unknown and in-progress data are preserved.
 
-Features: automatic camera-based IDEX XY calibration after heatsoak, independent repeatability checks and bounded offset corrections, native manual VAOC fallback, persistent camera worker, opt-in two-stage detector with grid-aligned cropped precision stage, opt-in original/experimental settling paths, configurable RatOS/slicer-derived thermal modes, measure-only diagnostics, and no-write 25–100-tool-change endurance diagnostics. Normal calibration verification tolerances are separate from endurance drift ceilings.
+The previous supervised dev5 25/50/100 tool-change endurance results are **not** dev6 hardware validation. The fresh installer refuses existing AutoXY and must not be used to overwrite a running dev5 setup. Installer manifest, license provenance and tests must be verified before shipping; real printer reinstall remains a supervised qualification step.
 
-Owner hardware results on RatRig V-Core 4 300 IDEX, RatOS 2.1: successful 25, 50 and 100 change runs (100 changes, 101 visits, 202 images), stable saved offsets throughout endurance, VAOC exited normally. One HTTP camera fetch error recovered via retry in full test. The earlier transient T1 MCU timing shutdown has not recurred on dev5 but was not individually root-caused. Results do not guarantee compatibility on other machines or prove 150°C full endurance performance.
-
-New users: fresh-install preflight and one-include configuration, OFF/uncommissioned initially. Existing users should **not** overlay the fresh installer on any previous AutoXY; migration from public beta requires a carefully tested plan. Nozzle-temperature GUI dropdown and fixed target option remain future work. Issues and PRs with sanitized hardware/commissioning logs are welcomed.
-
-Do not publish until adapted RatOS macro licence/provenance is reviewed. Do not upload local printer configuration, camera profile, owner-specific offsets, photo archives or logs.
+Not yet implemented: standalone scripted dev5 uninstall/migration; fixed-absolute-nozzle GUI; guaranteed cross-machine compatibility.
