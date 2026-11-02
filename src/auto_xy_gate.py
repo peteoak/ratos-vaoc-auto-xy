@@ -1912,12 +1912,12 @@ class AutoXYGate:
                 self.run_gcode('_VAOC_START')
                 self.vaoc_entered=True
                 self._diag_motion_complete('native_vaoc_start_complete')
-                self._diag_event('initial_t0_load_begin')
-                self.run_gcode('_VAOC_LOAD_TOOL T=0')
+                # Native _VAOC_START already loads and positions T0.
+                # Track that starting pose; do not load the same carriage twice.
                 self.active=0;self.delta=[0.,0.]
                 self.base=self.cp()
                 self.verify_pose()
-                self._diag_motion_complete('initial_t0_load_complete')
+                self._diag_motion_complete('initial_t0_ready')
             self.phase='CALIBRATE'
             gcmd.respond_info('AUTO XY: measuring live camera scale T0/T1')
             self.progress_stage(gcmd,'SCALING','Measuring T0 and T1 camera scale')
