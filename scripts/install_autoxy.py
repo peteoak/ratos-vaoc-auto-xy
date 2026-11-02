@@ -286,10 +286,14 @@ def plan(home,root,mode):
         require(not link.exists() and not link.is_symlink(),
                 'Klipper AutoXY extension already present')
         example=(root/'config/auto_xy.cfg.example').read_text()
-        # Fresh installation remains OFF + uncommissioned.
-        require('protected_print_enabled: False' in example and
-                'camera_registration_enabled: False' in example,
-                'Fresh example must be fail-closed by default')
+        # Protected print gate can be configured by default, but cannot run
+        # until the separately persisted AutoXY enable flag is deliberately set.
+        # Never disable commissioning requirements in a fresh installation.
+        require('protected_print_enabled: True' in example and
+                'camera_registration_enabled: False' in example and
+                'commission_required: True' in example and
+                'manual_vaoc_confirmation_required: True' in example,
+                'Fresh example must require camera commissioning and operator enable')
         changes['printer_data/config/auto_xy.cfg']=example.encode()
         changes['printer_data/config/printer.cfg']=add_single_include_safely(pc).encode()
         changes['klipper/klippy/extras/auto_xy_gate.py']=('SYMLINK:'+str(home/'auto_xy/klipper/auto_xy_gate.py')).encode()
