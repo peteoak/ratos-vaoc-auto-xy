@@ -3,7 +3,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 class SnapshotReleaseTests(unittest.TestCase):
  def test_src_exact_version(self):
-  self.assertIn('RELEASE_VERSION = "0.5.0-rc15-dev5"',(ROOT/'src/auto_xy_gate.py').read_text())
+  self.assertIn('RELEASE_VERSION = "0.5.0-rc15-dev6"',(ROOT/'src/auto_xy_gate.py').read_text())
  def test_temperature_set_and_experiments_retained(self):
   text=(ROOT/'src/auto_xy_gate.py').read_text()
   for item in ("('ratos','slicer_derived')", "('original','diagonal','dogleg')", "('legacy','two_stage','two_stage_roi')",'thermal_reduction_t0','thermal_reduction_t1'):
@@ -11,7 +11,11 @@ class SnapshotReleaseTests(unittest.TestCase):
   cfg=(ROOT/'config/auto_xy.cfg.example').read_text()
   self.assertIn('thermal_mode: ratos',cfg)
   self.assertIn('settling_path: original',cfg)
-  self.assertIn('protected_print_enabled: False',cfg)
+  self.assertIn('protected_print_enabled: True',cfg)
+  self.assertIn('commission_required: True',cfg)
+  self.assertIn('manual_vaoc_confirmation_required: True',cfg)
+  self.assertIn('camera_detector_mode: two_stage_roi',cfg)
+  self.assertIn('commissioned_detector_guard: True',cfg)
  def test_installer_package_validation(self):
   spec=importlib.util.spec_from_file_location('installed_snapshot',ROOT/'scripts/install_autoxy.py')
   # ratos_extension in sibling scripts dir is part of runtime import

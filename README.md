@@ -1,76 +1,53 @@
-# AutoXY v0.5.0-rc15-dev5 — RatOS 2.1 IDEX automatic camera XY alignment
+# AutoXY v0.5.0-rc15-dev6 — storage retention release candidate
 
-**Hardware-tested development pre-release**, not a stable or universally verified RatOS add-on. Independently maintained; not affiliated with RatRig/RatOS.
+**Development pre-release** for RatOS 2.1 IDEX; not validated on multiple printers. This candidate adds bounded calibration-artifact retention to the previously owner-tested RC15 dev5 calibration engine.
 
-This repository snapshot consolidates the current **tested dev5 controller** rather than changing its calibration or movement code. This review branch replaces the obsolete Beta 4.2 README and installer layout; merging into `main` and creating a tagged release remain separate decisions. The code automatically aligns the two toolheads using a fixed VAOC camera after bed heatsoak and before later print-start probing, with a native RatOS VAOC fallback.
+## Storage retention
 
-## What has been tested
+Default retention (age measured from the closed run's report modification time):
+- Successful calibration photographs: 7 days; 256 MiB category cap.
+- Failed calibration photographs: 30 days; 512 MiB category cap.
+- Diagnostic photographs: 7 days; 512 MiB category cap.
+- Endurance exports: 30 days; 128 MiB category cap.
+- `report.json`: 90 days; 128 MiB category cap.
 
-- RatRig V-Core 4 300 IDEX, RatOS 2.1, fixed USB VAOC camera, Beacon, physical endstop homing.
-- Supervised **25, 50 and 100 actual tool changes** with two images per measured visit; 100-change run completed 101 visits, 202 images, zero endurance offset writes, no reported MCU fault.
-- Automatic correction and independent verification are reported working on the owner's printer; protected-print and native manual VAOC recovery were also manually tested previously, but not independently reproduced on a second machine.
-- Vision candidate benchmark: 384 archived images; dev5 ROI mode matched dev4 for 380 accepted images with **zero changed precision centres**. Four were rejected by both. The new ROI detector resolved the earlier 150°C ambiguous photograph offline; the successful 100-change run was around 100°C, so no hotter endurance qualification is claimed.
-- An earlier transient Klipper T1 MCU `Timer too close` shutdown was not reproduced in completed dev5 tests; its root cause is not proven.
+A cleanup worker runs independently of calibration. Failed or incomplete runs, unknown files, symlinks and unexpectedly modified files are protected by conservative ownership and status checks. Latest failure runs are protected from quota pressure, but not age expiry. Quotas are best-effort when protected data cannot be removed. Cleanup errors never authorise printing or alter saved offsets.
 
-## Installation: new RatOS 2.1 systems only
+Preview files that *would* be deleted, without deleting any files:
+```bash
+python3 src/auto_xy_retention.py --results /home/pi/auto_xy/print_gate_runs
+```
+Destructive cleanup is opt-in on CLI with `--run`; it is also scheduled by the extension under its safety gates. Inspect preview before using CLI deletion. Defaults can be configured using the `retention_*` settings in `config/auto_xy.cfg.example`.
 
-**Never copy source files over an active printer.** Fresh installer **refuses an existing AutoXY installation** and requires an idle/cooled printer, native VAOC already available, no active print/retry/fault, stock VAOC camera and a working isolated Python venv. It never overwrites `ratos-variables.cfg` or saved XY/Z offsets.
+## Installing (fresh systems only)
 
-1. Make a full RatOS backup. Perform native manual VAOC and verify offsets exist. Confirm physical X/Y homing, camera alias and stock VAOC frontend work.
-2. Set up `/home/pi/auto-xy-venv` with `requirements-vision.txt` *outside Klipper's Python environment* (see `docs/NEW_INSTALL.md`).
-3. Transfer or clone this package onto the Pi and **read** the example configuration. In the package directory run:
+**Do not install over an existing AutoXY.** Back up full RatOS configuration, camera commissioning and offsets; verify native VAOC, power and homing, heaters idle and printer cool. A guarded fresh installer performs preflight and refuses existing AutoXY.
 
 ```bash
 python3 scripts/install_autoxy.py --check --mode fresh
 ```
 
-4. Only after `CHECK PASSED` and physical verification of idle, cool, safe printer state:
-
+After review and satisfactory preflight:
 ```bash
-python3 scripts/install_autoxy.py --install --mode fresh --confirm INSTALL_RC15_DEV5_FRESH
+python3 scripts/install_autoxy.py --install --mode fresh --confirm INSTALL_RC15_DEV6_FRESH
 sudo systemctl restart klipper
 ```
 
-5. Rehome and complete camera commissioning via `scripts/commission_camera.py` and a supervised, first no-write test before enabling automatic corrections or protected printing. **Do not copy nozzle offsets, camera profiles, or config files from another machine.** See `docs/NEW_INSTALL.md`.
+Follow `docs/NEW_INSTALL.md` for camera commissioning and supervised tests. This installer does not overwrite `ratos-variables.cfg` or saved offsets and uses a single `[include auto_xy.cfg]` in `printer.cfg`.
 
-*This fresh installer has offline tests, but has NOT been proven in a fresh RatOS installation on a second printer. Treat this as a supervised pre-release.*
+## Existing installations
 
-## Already running RC15 dev5 (owner's printer)
+Do **not** use the fresh installer as an upgrade or uninstall command. An existing dev5 installation requires a separate, verified retirement and restore plan before testing a clean GitHub reinstall. Preserve camera reference photographs and commissioning configuration outside any cleanup-managed results directory.
 
-**Do not reinstall.** Your existing working controller is the baseline. To compare installed runtime files against the reviewed package (read-only):
+## Validation
 
+Run offline tests:
 ```bash
-cd ~/AutoXY_v0.5.0-rc15-dev5_GitHub_Review
-python3 scripts/check_installed_dev5.py
+python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
-No restart, homing, offset changes or printer motion are needed to run this verification. If it differs, stop and inspect; this package intentionally has no force-install onto an existing RC15 dev5 system.
+Hardware validation remains limited to the previously reported supervised 25, 50 and 100-tool-change dev5 runs on one RatRig V-Core 4 300 IDEX. No dev6 printer-run qualification is claimed. Automatic XY runs after bed heatsoak and before later Beacon probing; fresh homing and measurement must be respected after motors disable.
 
-## Key configuration (in `[auto_xy_gate]`)
+## Attribution
 
-| Setting | Options / meaning |
-|---|---|
-| `camera_detector_mode` | `legacy` (fresh default), `two_stage`, `two_stage_roi` (tested crop) |
-| `camera_worker_mode` | `legacy` or `persistent` |
-| `settling_path` | `original` (default), experimental `diagonal` / `dogleg` |
-| `thermal_mode` | `ratos` (default existing RatOS heating) or `slicer_derived` |
-| `thermal_reduction_t0`, `_t1` | Per-tool reductions from slicer layer temperatures, default 50°C; capped by camera temperature limits |
-| `max_camera_nozzle_temp`, `max_camera_target_temp` | Camera measurement temperature safety limits |
-| `protected_print_enabled` | Opt-in guarded held-file workflow |
-| `allow_experimental_alignment_writes` | Disabled by default |
-| `commissioned_detector_guard` | Needed for `two_stage` and `two_stage_roi` |
-
-**Temperature options in this build are configuration keys, not a Mainsail dropdown.** A fixed absolute-camera-temperature strategy and GUI dropdown are future work; they are not silently implemented in this publication snapshot. The slicer-derived option needs explicit per-tool slicer temperatures and independently validated caps. For existing users, leave the proven RatOS heatsoak temperature settings unchanged until reviewed.
-
-Measurement-only mode does not write offsets and serves diagnostics; if its existing print-start path is used with qualifying in-tolerance readings, that behavior is intentionally preserved for now. The diagnostic endurance command never authorises printing.
-
-## Safety and compatibility
-
-- Heating/Beacon order, original tool-change path, existing verification tolerances and native VAOC recovery semantics are unchanged from RC15 dev5.
-- Every protected new print must have valid homing; after disabling motors, the homing flag is lost and the controller refuses motion until rehomed. No stale alignment should be inferred from a previous print.
-- A 1 mm diagnostic drift ceiling is **not** a production alignment tolerance.
-- For `AUTO_XY_ENDURANCE_RUN TOOL_CHANGES=100 DRIFT_LIMIT=1.0`, printer must be prepared and under supervision; it does not print.
-- Individual camera references and metadata are machine-specific. Never ship them in public releases.
-- Review provenance, applicable licensing, and attribution for adapted upstream RatOS macros before merging or tagging a release; see `THIRD_PARTY_NOTICES.md`.
-
-See `docs/GITHUB_RELEASE.md` for publication review. This repository update does not modify any printer installation. The RC15 dev5 preview is on the review branch and is not yet merged or tagged.
+Independent AutoXY project, unaffiliated with RatOS. See `THIRD_PARTY_NOTICES.md` for the outstanding upstream macro provenance and licence review before public redistribution.

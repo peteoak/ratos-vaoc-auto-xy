@@ -18,7 +18,7 @@ class FreshInstallerSnapshotTests(unittest.TestCase):
    folder=install.install(home,changes,'fresh',None)
    self.assertTrue((home/'klipper/klippy/extras/auto_xy_gate.py').is_symlink())
    self.assertEqual((home/'auto_xy/klipper/auto_xy_gate.py').read_bytes(),(ROOT/'src/auto_xy_gate.py').read_bytes())
-   self.assertIn('camera_detector_mode: legacy',(home/'printer_data/config/auto_xy.cfg').read_text())
+   self.assertIn('camera_detector_mode: two_stage_roi',(home/'printer_data/config/auto_xy.cfg').read_text())
    install.rollback(home,folder,live=False)
    self.assertEqual((home/'printer_data/config/printer.cfg').read_text(),initial)
    self.assertFalse((home/'klipper/klippy/extras/auto_xy_gate.py').exists())

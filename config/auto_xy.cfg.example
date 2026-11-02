@@ -5,10 +5,10 @@
 # then commission the AutoXY camera image profile in the same homed session,
 # then run AUTO_XY_RUN_NOW for the first time (supervised, preferably no-write).
 # See docs/REQUIREMENTS.md; do not disable motors, rehome or print between.
-# Enable protected prints and automatic correction only after validation.
+# Protected-print guarding is enabled by default; AutoXY remains OFF until commissioned and deliberately enabled.
 # Never put idex_xoffset/idex_yoffset/idex_zoffset in this file.
 
-# AutoXY v0.5.0-rc15-dev5 RatOS 2.1 configuration example AFTER bed heatsoak, BEFORE Beacon contact probing at 170 C.
+# AutoXY v0.5.0-rc15-dev6 RatOS 2.1 configuration example AFTER bed heatsoak, BEFORE Beacon contact probing at 170 C.
 # Mainsail automatically displays each non-underscore macro as a button, including AUTO_XY_TOGGLE.
 # OFF by default. Existing saved XY tool offsets are used unchanged when OFF.
 # Put only the [auto_xy_gate] settings in this file. User control macros are
@@ -29,24 +29,24 @@ camera_url: http://127.0.0.1:8080/?action=snapshot
 # A stock nozzle still needs a plausible visible rim radius and good lighting.
 roi: auto
 camera_registration_enabled: False
-# RC14 experiments. Keep original until supervised comparison completes.
+# Validated production path: original T0/T1/T0 settling; diagonal and dogleg remain experimental.
 settling_path: original
 # Alternative experimental modes (not auto-enabled): diagonal, dogleg
 # The second stationary picture retains RC13's original 0.80-second wait.
 camera_pair_gap: 0.80
-# Fast vision modes are opt-in AFTER camera commissioning; default safe legacy.
+# Validated camera detector from RC15 endurance tests (still requires commissioning).
 # Options: legacy, two_stage, two_stage_roi (faster cropped mode).
-camera_detector_mode: legacy
+camera_detector_mode: two_stage_roi
 # Options: legacy, persistent. Persistent worker avoids per-image Python startup.
 camera_worker_mode: persistent
 # Optional per-capture diagnostic timings.
 camera_diagnostics_enabled: False
 # Opt-in commissioned nozzle-position and radius guard (requires photo profile).
-commissioned_detector_guard: False
+commissioned_detector_guard: True
 # Must remain False during measure-only movement trials. Do not opt in to
 # experimental automatic offset writes before real printer qualification.
 allow_experimental_alignment_writes: False
-protected_print_enabled: False
+protected_print_enabled: True
 tolerance: 0.030
 # Before ANY offset changes: run T0 -> T1 -> T0 camera measurements
 # until two consecutive readings agree within 0.015 mm, or abort after 4.
@@ -120,11 +120,21 @@ camera_temp_pair_tolerance: 2.0
 reuse_max_bed_temp_delta: 5.0
 reuse_max_nozzle_temp_delta: 10.0
 
-# Image retention: successful runs 7 days, failed runs 30 days,
-# report.json 90 days. Cleanup runs while Klipper is idle (about daily).
+# Image and diagnostic retention v2. Oldest eligible files removed once
+# EITHER the age OR the independent size budget is reached, while idle only.
+# All limits are MiB (1 MiB = 1,048,576 bytes). The latest run and two most
+# recent failed runs are protected from quota eviction, but not age expiry.
+# Unknown/unreadable runs are retained; inspect retention dry-run warnings.
 retention_success_images_days: 7
 retention_failed_images_days: 30
+retention_diagnostic_images_days: 7
+retention_diagnostic_exports_days: 30
 retention_reports_days: 90
+retention_max_success_images_mib: 256
+retention_max_failed_images_mib: 512
+retention_max_diagnostic_images_mib: 512
+retention_max_reports_mib: 128
+retention_max_exports_mib: 128
 
 
 # Exactly ONE include in printer.cfg: [include auto_xy.cfg].

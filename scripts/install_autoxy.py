@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AutoXY v0.5.0 RC15 dev5: guarded fresh-only installer (new users).
+"""AutoXY v0.5.0 RC15 dev6: guarded fresh-only installer (new users).
 
 Safe by default: --check only reads; --install never changes RatOS saved offsets.
 Only use --install after separately reviewing preflight results, with a cool,
@@ -20,7 +20,7 @@ from pathlib import Path
 import ratos_extension
 from urllib.request import Request, urlopen
 
-VERSION = '0.5.0-rc15-dev5'
+VERSION = '0.5.0-rc15-dev6'
 HOME = Path('/home/pi')
 EXPECTED_RC7 = {
     'auto_xy/klipper/auto_xy_gate.py':'9c67c41059a6e234f9a2630c76a5d4ebf070ecb32434509366a1af19bcc77cdc',
@@ -286,10 +286,14 @@ def plan(home,root,mode):
         require(not link.exists() and not link.is_symlink(),
                 'Klipper AutoXY extension already present')
         example=(root/'config/auto_xy.cfg.example').read_text()
-        # Fresh installation remains OFF + uncommissioned.
-        require('protected_print_enabled: False' in example and
-                'camera_registration_enabled: False' in example,
-                'Fresh example must be fail-closed by default')
+        # Protected print gate can be configured by default, but cannot run
+        # until the separately persisted AutoXY enable flag is deliberately set.
+        # Never disable commissioning requirements in a fresh installation.
+        require('protected_print_enabled: True' in example and
+                'camera_registration_enabled: False' in example and
+                'commission_required: True' in example and
+                'manual_vaoc_confirmation_required: True' in example,
+                'Fresh example must require camera commissioning and operator enable')
         changes['printer_data/config/auto_xy.cfg']=example.encode()
         changes['printer_data/config/printer.cfg']=add_single_include_safely(pc).encode()
         changes['klipper/klippy/extras/auto_xy_gate.py']=('SYMLINK:'+str(home/'auto_xy/klipper/auto_xy_gate.py')).encode()
@@ -475,7 +479,7 @@ def main():
     if a.check:
         print('CHECK PASSED; NO FILES CHANGED')
     else:
-        require(a.confirm=='INSTALL_RC15_DEV5_FRESH','Installation requires --confirm INSTALL_RC15_DEV5_FRESH')
+        require(a.confirm=='INSTALL_RC15_DEV6_FRESH','Installation requires --confirm INSTALL_RC15_DEV6_FRESH')
         folder=install(home,changes,mode,offsets)
         print('AutoXY',VERSION,'installed; rollback:',folder)
         if mode in ('fresh','clean-reinstall'):
