@@ -18,7 +18,7 @@
     "scripts/check_installed_dev5.py": "c5a2edbe2edf237d752ae7f56c45241dae22708ee48b0f762dc1d41576393ee6",
     "scripts/commission_camera.py": "547222df016b8f6d36b833f3634f9f9ef8353f1065a143cea2b8c2c79c8de152",
     "scripts/host_sampler.py": "0a11723c12cf7dba07eaa0893b1c4d9042f43be9dce3db389f7d5cae9b2089e9",
-    "scripts/install_autoxy.py": "37079b0628dbf24e8240dfd1d4d7b6aa47494b1b4a39dad6540adcc54b1f569b",
+    "scripts/install_autoxy.py": "e3cd0bd0ecb358c78251cf4430630d87ca9169059cb5b3dfbc6e9923e269fa40",
     "scripts/post_install_check.py": "8357e5b3ac47edce36fba455193c88d2ce1ffe8866c489d4758827608a4a3f54",
     "scripts/ratos_extension.py": "d7310bce34841493fc6b4737327b3d4e1d6625f2535b60e54f39ca97a92c01de",
     "scripts/replay_archives.py": "fdab85ba874d3d8b439dcedf687d42a88f80afb00c41e6d72da2b151c2c6aa71",
@@ -47,7 +47,7 @@
     "tests/test_gate_integration.py": "7461502e475821ad4575470292c37581232b629a1b0c57f1c4b8f0e6458c53cb",
     "tests/test_gate_source.py": "28e40477ff3676b505e860cf17bd428f4c586821e7cbef4599816d60a4c865c1",
     "tests/test_installer.py": "9c3a1191614c49e7621b40dc25525264df46c20f8a47c20479d410aa95669b8f",
-    "tests/test_publication_snapshot.py": "e3e9c95f86c0710c937058278ff1feb4f215e8e8b135f10e1d92e062ae3f8c60",
+    "tests/test_publication_snapshot.py": "5e88cb48b6c0050e43f4d77a3eb02f22c5e13147902ec83f855b6d2c7af9ddf1",
     "tests/test_worker_live_protocol.py": "ae82ebb9c6940e50ce966904ef34eebca73534d3e22d143e68b4120b048ce5fc",
     "tests/test_worker_protocol.py": "b1fe17bc2b3046b9cc30835c4e6cf70b9d2eb885e402657a729d6340b8d2ec5c",
     "tests/test_retention_dev6.py": "7af2a5c7ba2aed48e9d6cb1d1d3199d81dba4997bab98c69672f35a1d5319ed4"
