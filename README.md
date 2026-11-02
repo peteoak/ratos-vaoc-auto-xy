@@ -1,6 +1,6 @@
 # AutoXY v0.5.0-rc15-dev6 — storage retention release candidate
 
-**Development pre-release** for RatOS 2.1 IDEX; not validated on multiple printers. This candidate adds bounded calibration-artifact retention to the previously owner-tested RC15 dev5 calibration engine.
+**Development pre-release** for RatOS 2.1 IDEX, validated on one RatRig V-Core 4 300 IDEX but not across multiple printers. RC15 dev6 adds bounded artifact retention, eliminates the redundant T0 reload immediately after native `_VAOC_START`, and promotes the owner's selected detector, timing and protected-print defaults.
 
 ## Storage retention
 
@@ -37,7 +37,7 @@ Follow `docs/NEW_INSTALL.md` for camera commissioning and supervised tests. This
 
 ## Existing installations
 
-Do **not** use the fresh installer as an upgrade or uninstall command. An existing dev5 installation requires a separate, verified retirement and restore plan before testing a clean GitHub reinstall. Preserve camera reference photographs and commissioning configuration outside any cleanup-managed results directory.
+Do **not** use the fresh installer as an upgrade or uninstall command. The owner successfully completed a backed-up quarantine, fresh GitHub reinstall and subsequent reviewed controller/config update. There is still **no general-purpose supported in-place upgrade/uninstall tool**; existing installations require a machine-specific reviewed procedure. Preserve camera reference photographs and commissioning configuration outside any cleanup-managed results directory.
 
 ## Validation
 
@@ -46,7 +46,11 @@ Run offline tests:
 python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
-Hardware validation remains limited to the previously reported supervised 25, 50 and 100-tool-change dev5 runs on one RatRig V-Core 4 300 IDEX. No dev6 printer-run qualification is claimed. Automatic XY runs after bed heatsoak and before later Beacon probing; fresh homing and measurement must be respected after motors disable.
+Dev5 completed supervised 25-, 50- and 100-tool-change endurance tests on one RatRig V-Core 4 300 IDEX. RC15 dev6 was successfully installed from GitHub on that printer; Klipper reached Ready, the camera stream and restored commissioning profile were verified, and the corrected controller matched the source checksum. The owner ran 39 offline tests (34 passed, 5 skipped), and GitHub Actions passed on the corrected source commit. **The first physical calibration after removing the duplicate T0 load, live retention expiry/deletion, and complete failure/recovery-to-print continuation have not been verified in this release.** Automatic XY runs after bed heatsoak and before later Beacon probing; fresh homing and measurement must be respected after motors disable.
+
+## Validated machine defaults
+
+`config/auto_xy.cfg.example` now defaults to `camera_detector_mode: two_stage_roi`, persistent worker, original settling path, 0.80-second camera pair gap and settling time, commissioned detector guard enabled, and `protected_print_enabled: True`. AutoXY's saved enable state is still deliberately OFF on a clean installation until operator commissioning and enablement. Protected-print support requires the separately prepared two-phase print-file path; enabling the config flag alone does not automatically convert ordinary slicer files.
 
 ## Attribution
 
