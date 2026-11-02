@@ -5,7 +5,7 @@
 # then commission the AutoXY camera image profile in the same homed session,
 # then run AUTO_XY_RUN_NOW for the first time (supervised, preferably no-write).
 # See docs/REQUIREMENTS.md; do not disable motors, rehome or print between.
-# Enable protected prints and automatic correction only after validation.
+# Protected-print guarding is enabled by default; AutoXY remains OFF until commissioned and deliberately enabled.
 # Never put idex_xoffset/idex_yoffset/idex_zoffset in this file.
 
 # AutoXY v0.5.0-rc15-dev6 RatOS 2.1 configuration example AFTER bed heatsoak, BEFORE Beacon contact probing at 170 C.
@@ -29,24 +29,24 @@ camera_url: http://127.0.0.1:8080/?action=snapshot
 # A stock nozzle still needs a plausible visible rim radius and good lighting.
 roi: auto
 camera_registration_enabled: False
-# RC14 experiments. Keep original until supervised comparison completes.
+# Validated production path: original T0/T1/T0 settling; diagonal and dogleg remain experimental.
 settling_path: original
 # Alternative experimental modes (not auto-enabled): diagonal, dogleg
 # The second stationary picture retains RC13's original 0.80-second wait.
 camera_pair_gap: 0.80
-# Fast vision modes are opt-in AFTER camera commissioning; default safe legacy.
+# Validated camera detector from RC15 endurance tests (still requires commissioning).
 # Options: legacy, two_stage, two_stage_roi (faster cropped mode).
-camera_detector_mode: legacy
+camera_detector_mode: two_stage_roi
 # Options: legacy, persistent. Persistent worker avoids per-image Python startup.
 camera_worker_mode: persistent
 # Optional per-capture diagnostic timings.
-camera_diagnostics_enabled: False
+camera_diagnostics_enabled: True
 # Opt-in commissioned nozzle-position and radius guard (requires photo profile).
 commissioned_detector_guard: False
 # Must remain False during measure-only movement trials. Do not opt in to
 # experimental automatic offset writes before real printer qualification.
 allow_experimental_alignment_writes: False
-protected_print_enabled: False
+protected_print_enabled: True
 tolerance: 0.030
 # Before ANY offset changes: run T0 -> T1 -> T0 camera measurements
 # until two consecutive readings agree within 0.015 mm, or abort after 4.
@@ -66,7 +66,7 @@ max_step: 0.050
 # Conservative first Y correction; configurable per machine (max 0.050 mm).
 first_y_max_step: 0.020
 max_total_change: 0.300
-settle: 0.80
+settle: 1.40
 snapshot_timeout: 7.0
 # Thermal mode is RATOS BY DEFAULT to protect existing, hardware-validated
 # installations. Opt-in slicer_derived mode: subtract 50 C independently from
