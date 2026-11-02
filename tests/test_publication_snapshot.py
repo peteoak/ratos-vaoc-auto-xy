@@ -11,7 +11,11 @@ class SnapshotReleaseTests(unittest.TestCase):
   cfg=(ROOT/'config/auto_xy.cfg.example').read_text()
   self.assertIn('thermal_mode: ratos',cfg)
   self.assertIn('settling_path: original',cfg)
-  self.assertIn('protected_print_enabled: False',cfg)
+  self.assertIn('protected_print_enabled: True',cfg)
+  self.assertIn('commission_required: True',cfg)
+  self.assertIn('manual_vaoc_confirmation_required: True',cfg)
+  self.assertIn('camera_detector_mode: two_stage_roi',cfg)
+  self.assertIn('commissioned_detector_guard: True',cfg)
  def test_installer_package_validation(self):
   spec=importlib.util.spec_from_file_location('installed_snapshot',ROOT/'scripts/install_autoxy.py')
   # ratos_extension in sibling scripts dir is part of runtime import
