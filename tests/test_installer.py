@@ -11,6 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('rc15_dev5_upgrade',ROOT/'scripts/upgrade_rc15_dev4_to_dev5.py')
 inst=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(inst)
+@unittest.skipIf(__import__('json').loads((ROOT/'MANIFEST.json').read_text())['version'] != '0.5.0-rc15-dev5', 'Historical dev4-to-dev5 upgrade tests; not applicable to fresh dev6 package')
 class InstallerTests(unittest.TestCase):
     def home(self,temp):
         home=Path(temp)/'pi'
