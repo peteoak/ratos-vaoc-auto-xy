@@ -40,9 +40,9 @@ camera_detector_mode: two_stage_roi
 # Options: legacy, persistent. Persistent worker avoids per-image Python startup.
 camera_worker_mode: persistent
 # Optional per-capture diagnostic timings.
-camera_diagnostics_enabled: True
+camera_diagnostics_enabled: False
 # Opt-in commissioned nozzle-position and radius guard (requires photo profile).
-commissioned_detector_guard: False
+commissioned_detector_guard: True
 # Must remain False during measure-only movement trials. Do not opt in to
 # experimental automatic offset writes before real printer qualification.
 allow_experimental_alignment_writes: False
@@ -66,7 +66,7 @@ max_step: 0.050
 # Conservative first Y correction; configurable per machine (max 0.050 mm).
 first_y_max_step: 0.020
 max_total_change: 0.300
-settle: 1.40
+settle: 0.80
 snapshot_timeout: 7.0
 # Thermal mode is RATOS BY DEFAULT to protect existing, hardware-validated
 # installations. Opt-in slicer_derived mode: subtract 50 C independently from
