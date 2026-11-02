@@ -3,7 +3,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 class SnapshotReleaseTests(unittest.TestCase):
  def test_src_exact_version(self):
-  self.assertIn('RELEASE_VERSION = "0.5.0-rc15-dev5"',(ROOT/'src/auto_xy_gate.py').read_text())
+  self.assertIn('RELEASE_VERSION = "0.5.0-rc15-dev6"',(ROOT/'src/auto_xy_gate.py').read_text())
  def test_temperature_set_and_experiments_retained(self):
   text=(ROOT/'src/auto_xy_gate.py').read_text()
   for item in ("('ratos','slicer_derived')", "('original','diagonal','dogleg')", "('legacy','two_stage','two_stage_roi')",'thermal_reduction_t0','thermal_reduction_t1'):
