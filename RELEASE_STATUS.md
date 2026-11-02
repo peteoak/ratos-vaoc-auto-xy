@@ -1,11 +1,7 @@
-# RC15 dev5 — GitHub review snapshot
+# RC15 dev6 — retention candidate
 
-**Code version unchanged from live RC15 dev5**. Last hardware validation supplied by owner: 2026-10-29, 25/25, 50/50, 100/100 endurance tool changes with normal calibration verified, saved offsets unchanged during endurance and VAOC exited. All measurements from one printer. Long-term uptime, camera conditions and fresh multi-machine installations remain unqualified.
+RC15 dev6 implements the bounded image/report/export retention policy on the `autoxy-rc15-dev6-storage-retention` branch. The previously validated camera and calibration movement paths are retained from dev5 apart from retention scheduling/integration changes; dev6 has not yet been tested on the printer.
 
-The files under `src/auto_xy_{gate,detector,vision_worker}.py` are **byte-identical** to the previously packaged dev5 release. No motion, heat, detection, state-machine, measure-only or calibration behavior changes are introduced by this GitHub snapshot.
+Pre-release validation gates: manifest integrity, Python offline tests, retention dry-run against synthetic data, clean installation checks, safe uninstall planning, and supervised real printer commissioning. **Do not uninstall an existing working AutoXY until a clean reinstallation procedure and complete backup have been verified.**
 
-The integrated fresh installer is adapted from the earlier guarded RC14 installer, with new RC15 source paths and version and a mandatory confirmation token; its offline preflight tests are included. It **must not be used to overwrite the owner's installed RC15 dev5**. Existing users use `scripts/check_installed_dev5.py`.
-
-Known work not yet delivered: GUI dropdown / fixed absolute nozzle strategy; validation of alternate nozzle temperatures (including 150°C); fresh multi-machine installs; licence/provenance confirmation; community feedback. Experimental settling and existing thermal strategy options remain off by default.
-
-This is **not** a tag or public GitHub release until somebody with repo credentials reviews and pushes it.
+Camera profile, private results and saved offsets must not be committed. Stock RatOS files must not be overwritten. Attribution review for adapted RatOS macros remains open.
