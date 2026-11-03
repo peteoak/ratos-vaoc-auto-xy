@@ -5,7 +5,8 @@
 # then commission the AutoXY camera image profile in the same homed session,
 # then run AUTO_XY_RUN_NOW for the first time (supervised, preferably no-write).
 # See docs/REQUIREMENTS.md; do not disable motors, rehome or print between.
-# Protected-print guarding is enabled by default; AutoXY remains OFF until commissioned and deliberately enabled.
+# Protected-print guarding is OFF by default until automatic file integration and recovery are validated.
+# AutoXY itself remains OFF until commissioned and deliberately enabled.
 # Never put idex_xoffset/idex_yoffset/idex_zoffset in this file.
 
 # AutoXY v0.5.0-rc15-dev6 RatOS 2.1 configuration example AFTER bed heatsoak, BEFORE Beacon contact probing at 170 C.
@@ -46,7 +47,7 @@ commissioned_detector_guard: True
 # Must remain False during measure-only movement trials. Do not opt in to
 # experimental automatic offset writes before real printer qualification.
 allow_experimental_alignment_writes: False
-protected_print_enabled: True
+protected_print_enabled: False
 tolerance: 0.030
 # Before ANY offset changes: run T0 -> T1 -> T0 camera measurements
 # until two consecutive readings agree within 0.015 mm, or abort after 4.
@@ -59,8 +60,9 @@ preflight_settling_tolerance: 0.015
 max_corrections: 10
 # No-write, in-tolerance verification checks per calibration (two consecutive to pass).
 max_verifications: 6
-# Protected-print recovery uses held virtual-SD with one guarded retry and
-# native manual VAOC. Legacy inline retry intentionally DISABLED.
+# Experimental protected-print recovery requires a separately prepared two-phase file;
+# leave protected_print_enabled False for normal RatOS printing until integrated.
+# Legacy inline retry intentionally DISABLED.
 inline_print_retry: False
 max_step: 0.050
 # Conservative first Y correction; configurable per machine (max 0.050 mm).
