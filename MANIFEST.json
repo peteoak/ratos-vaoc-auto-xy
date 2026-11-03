@@ -18,7 +18,7 @@
     "scripts/check_installed_dev5.py": "c5a2edbe2edf237d752ae7f56c45241dae22708ee48b0f762dc1d41576393ee6",
     "scripts/commission_camera.py": "547222df016b8f6d36b833f3634f9f9ef8353f1065a143cea2b8c2c79c8de152",
     "scripts/host_sampler.py": "0a11723c12cf7dba07eaa0893b1c4d9042f43be9dce3db389f7d5cae9b2089e9",
-    "scripts/install_autoxy.py": "e3cd0bd0ecb358c78251cf4430630d87ca9169059cb5b3dfbc6e9923e269fa40",
+    "scripts/install_autoxy.py": "7a1b61dbb786598b79f159422bc5f40edd6211b43baf38fc406165ecf295457c",
     "scripts/post_install_check.py": "8357e5b3ac47edce36fba455193c88d2ce1ffe8866c489d4758827608a4a3f54",
     "scripts/ratos_extension.py": "d7310bce34841493fc6b4737327b3d4e1d6625f2535b60e54f39ca97a92c01de",
     "scripts/replay_archives.py": "fdab85ba874d3d8b439dcedf687d42a88f80afb00c41e6d72da2b151c2c6aa71",
