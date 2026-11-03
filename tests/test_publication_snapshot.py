@@ -11,7 +11,7 @@ class SnapshotReleaseTests(unittest.TestCase):
   cfg=(ROOT/'config/auto_xy.cfg.example').read_text()
   self.assertIn('thermal_mode: ratos',cfg)
   self.assertIn('settling_path: original',cfg)
-  self.assertIn('protected_print_enabled: True',cfg)
+  self.assertIn('protected_print_enabled: False',cfg)
   self.assertIn('commission_required: True',cfg)
   self.assertIn('manual_vaoc_confirmation_required: True',cfg)
   self.assertIn('camera_detector_mode: two_stage_roi',cfg)
