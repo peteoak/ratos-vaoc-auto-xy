@@ -286,10 +286,10 @@ def plan(home,root,mode):
         require(not link.exists() and not link.is_symlink(),
                 'Klipper AutoXY extension already present')
         example=(root/'config/auto_xy.cfg.example').read_text()
-        # Protected print gate can be configured by default, but cannot run
-        # until the separately persisted AutoXY enable flag is deliberately set.
-        # Never disable commissioning requirements in a fresh installation.
-        require('protected_print_enabled: True' in example and
+        # Leave experimental protected-print gating disabled by default so
+        # ordinary RatOS START_PRINT remains usable on a fresh install.
+        # Never disable camera commissioning or operator activation requirements.
+        require('protected_print_enabled: False' in example and
                 'camera_registration_enabled: False' in example and
                 'commission_required: True' in example and
                 'manual_vaoc_confirmation_required: True' in example,
