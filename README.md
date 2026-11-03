@@ -1,6 +1,6 @@
 # AutoXY v0.5.0-rc15-dev6 — storage retention release candidate
 
-**Development pre-release** for RatOS 2.1 IDEX, validated on one RatRig V-Core 4 300 IDEX but not across multiple printers. RC15 dev6 adds bounded artifact retention, eliminates the redundant T0 reload immediately after native `_VAOC_START`, and promotes the owner's selected detector, timing and protected-print defaults.
+**Development pre-release** for RatOS 2.1 IDEX, validated on one RatRig V-Core 4 300 IDEX but not across multiple printers. RC15 dev6 adds bounded artifact retention, eliminates the redundant T0 reload immediately after native `_VAOC_START`, and promotes the owner's selected detector and timing defaults. Protected printing remains opt-in until automatic integration is validated.
 
 ## Storage retention
 
@@ -50,7 +50,7 @@ Dev5 completed supervised 25-, 50- and 100-tool-change endurance tests on one Ra
 
 ## Validated machine defaults
 
-`config/auto_xy.cfg.example` now defaults to `camera_detector_mode: two_stage_roi`, persistent worker, original settling path, 0.80-second camera pair gap and settling time, commissioned detector guard enabled, and `protected_print_enabled: True`. AutoXY's saved enable state is still deliberately OFF on a clean installation until operator commissioning and enablement. Protected-print support requires the separately prepared two-phase print-file path; enabling the config flag alone does not automatically convert ordinary slicer files.
+`config/auto_xy.cfg.example` now defaults to `camera_detector_mode: two_stage_roi`, persistent worker, original settling path, 0.80-second camera pair gap and settling time, commissioned detector guard enabled, and `protected_print_enabled: False`. AutoXY's saved enable state is still deliberately OFF on a clean installation until operator commissioning and enablement. Ordinary RatOS START_PRINT remains available with AutoXY enabled. Experimental protected-print support requires the separately prepared two-phase print-file path; enabling its config flag alone does not automatically convert ordinary slicer files. Do not turn it on for ordinary unmodified print files.
 
 ## Attribution
 
