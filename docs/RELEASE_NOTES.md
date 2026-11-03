@@ -4,7 +4,7 @@
 
 - Bounded retention for successful calibration images (7 days/256 MiB), failed images (30 days/512 MiB), diagnostic images (7 days/512 MiB), exports (30 days/128 MiB) and reports (90 days/128 MiB). Cleanup is conservative around incomplete, unknown, symlinked and modified data.
 - Removed the redundant explicit `_VAOC_LOAD_TOOL T=0` immediately after native `_VAOC_START`, which already selects T0. The controller still records and verifies the initial T0 pose; subsequent necessary T0/T1 load operations remain.
-- Updated default configuration: `two_stage_roi` detector, persistent camera worker, original settling path, 0.80-second pair gap and settling delay, commissioned detector guard enabled, protected-print gate enabled. Fresh-install calibration enablement still requires operator commissioning and activation.
+- Updated default configuration: `two_stage_roi` detector, persistent camera worker, original settling path, 0.80-second pair gap and settling delay, commissioned detector guard enabled, protected-print gate disabled by default to preserve ordinary RatOS printing until automatic protected-file integration is validated. Fresh-install calibration enablement still requires operator commissioning and activation.
 
 ## Verification and deployment
 
@@ -15,4 +15,4 @@
 
 ## Remaining qualification
 
-The first physical calibration with the T0 fix, live scheduled retention expiry/deletion, and end-to-end failed-calibration/manual VAOC/held-file recovery remain unverified. Protected printing needs a properly prepared two-phase print file; its default configuration does not automatically transform ordinary slicer output. No general in-place upgrade/uninstaller, multi-printer certification or fixed absolute-nozzle GUI is provided. Upstream RatOS macro licensing and attribution remain open; see `THIRD_PARTY_NOTICES.md`.
+The first physical calibration with the T0 fix, live scheduled retention expiry/deletion, and end-to-end failed-calibration/manual VAOC/held-file recovery remain unverified. Protected printing is opt-in (default OFF) and needs a properly prepared two-phase print file; the configuration does not automatically transform ordinary slicer output. No general in-place upgrade/uninstaller, multi-printer certification or fixed absolute-nozzle GUI is provided. Upstream RatOS macro licensing and attribution remain open; see `THIRD_PARTY_NOTICES.md`.
