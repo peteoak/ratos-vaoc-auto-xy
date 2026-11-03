@@ -47,7 +47,7 @@
     "tests/test_gate_integration.py": "7461502e475821ad4575470292c37581232b629a1b0c57f1c4b8f0e6458c53cb",
     "tests/test_gate_source.py": "28e40477ff3676b505e860cf17bd428f4c586821e7cbef4599816d60a4c865c1",
     "tests/test_installer.py": "9c3a1191614c49e7621b40dc25525264df46c20f8a47c20479d410aa95669b8f",
-    "tests/test_publication_snapshot.py": "55fea0ed72cf6c636c55135442c5503d42e5cbf96b254d461f358d6cf55669c5",
+    "tests/test_publication_snapshot.py": "3665675f8b596d43fadf9dcde99df701e18da7b7749de1084e68c387acefe82b",
     "tests/test_worker_live_protocol.py": "ae82ebb9c6940e50ce966904ef34eebca73534d3e22d143e68b4120b048ce5fc",
     "tests/test_worker_protocol.py": "b1fe17bc2b3046b9cc30835c4e6cf70b9d2eb885e402657a729d6340b8d2ec5c",
     "tests/test_retention_dev6.py": "7af2a5c7ba2aed48e9d6cb1d1d3199d81dba4997bab98c69672f35a1d5319ed4"
