@@ -215,6 +215,32 @@ class PostHeatsoakGateMatrix(unittest.TestCase):
             g.cmd_AUTO_XY_GATE(FakeCommand(MODE="OTHER"))
 
 
+    def test_protected_independent_blocks_before_reuse_shortcut(self):
+        g = make_gate(protected=True)
+        g.pending_print_mode = "INDEPENDENT"
+        g.pending_toolshifts = 1
+        g.pending_reuse_candidate = True
+        g.reuse_enabled = lambda: True
+        g._reuse_check = lambda **kwargs: (True, "eligible")
+        with self.assertRaisesRegex(RuntimeError, "requires AUTOXY_PRINT_CALIBRATE"):
+            g.cmd_AUTO_XY_GATE(FakeCommand(MODE="PRINT"))
+
+    def test_protected_independent_retry_without_owned_phase_blocked(self):
+        g = make_gate(protected=True, sd=False)
+        g._retry_precommitted = True
+        g.active_print_mode = "INDEPENDENT"
+        with self.assertRaisesRegex(RuntimeError, "requires AUTOXY_PRINT_CALIBRATE"):
+            g.cmd_AUTO_XY_GATE(FakeCommand(MODE="PRINT"))
+
+    def test_protected_independent_inside_owned_phase_passes_guard(self):
+        g = make_gate(protected=True)
+        g._protected_inside_gate = True
+        g.pending_print_mode = "INDEPENDENT"
+        g.pending_toolshifts = 1
+        # Deliberately stop at the next prerequisite; no hardware is simulated.
+        with self.assertRaisesRegex(RuntimeError, "Printer must be homed"):
+            g.cmd_AUTO_XY_GATE(FakeCommand(MODE="PRINT"))
+
 class SlicerThermalMatrix(unittest.TestCase):
     def test_dual_temp_inputs_remain_independent(self):
         p, target = public.slicer_nozzle_targets("210,245", (50.0, 50.0), 200.0)

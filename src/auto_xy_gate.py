@@ -1717,12 +1717,6 @@ class AutoXYGate:
             return
         if self.busy: raise gcmd.error('AUTO XY already running')
         if mode=='PRINT':
-            # Belt-and-braces guard: protected-print support must never fall
-            # back to the older inline retry that aborts on correlation errors.
-            if self.protected_print_enabled and not self._protected_inside_gate:
-                raise gcmd.error(
-                    'AutoXY protected print requires AUTOXY_PRINT_CALIBRATE. '
-                    'Ordinary START_PRINT cannot safely hold original G-code.')
             # The original START_PRINT can also run from the RatOS VAOC
             # console workflow; do not launch AutoXY for those calls.
             if not self._retry_precommitted and not self.virtual_sd_active():
@@ -1736,6 +1730,14 @@ class AutoXYGate:
                 # no new _USER_START_PRINT is executed between attempts.
                 if self.active_print_mode!='INDEPENDENT':
                     raise gcmd.error('Auto XY inline retry lost its independent-mode context')
+                # This protection applies ONLY to a positively classified
+                # independent two-tool print; SINGLE_TOOL/COPY/MIRROR and
+                # non-virtual-SD console starts already returned above.
+                # A real independent job must still own its protected phase.
+                if self.protected_print_enabled and not self._protected_inside_gate:
+                    raise gcmd.error(
+                        'AutoXY protected print requires AUTOXY_PRINT_CALIBRATE. '
+                        'Ordinary START_PRINT cannot safely hold original G-code.')
             else:
                 requested=self.pending_print_mode
                 captured_toolshifts=self.pending_toolshifts
@@ -1751,6 +1753,14 @@ class AutoXYGate:
                     return
                 if requested!='INDEPENDENT':
                     raise gcmd.error('Auto XY: invalid START_PRINT mode: '+str(requested))
+                # This protection applies ONLY to a positively classified
+                # independent two-tool print; SINGLE_TOOL/COPY/MIRROR and
+                # non-virtual-SD console starts already returned above.
+                # A real independent job must still own its protected phase.
+                if self.protected_print_enabled and not self._protected_inside_gate:
+                    raise gcmd.error(
+                        'AutoXY protected print requires AUTOXY_PRINT_CALIBRATE. '
+                        'Ordinary START_PRINT cannot safely hold original G-code.')
                 self.active_print_mode='INDEPENDENT'
                 # The earliest print hook has already enforced the fault
                 # latch. At the post-heatsoak gate, trust nothing stale:
