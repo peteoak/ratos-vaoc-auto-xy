@@ -51,11 +51,11 @@ def host_check(version=None, machine=None, system=None):
 
 # Run in the venv being tested, not in Klipper's Python or the system Python.
 SMOKE = (
-    'import json,numpy as n,cv2; '
+    'import json,numpy as n,cv2,importlib.metadata as meta; '
     'a=n.zeros((4,4,3),dtype=n.uint8); '
     'b=cv2.cvtColor(a,cv2.COLOR_BGR2GRAY); '
     'assert b.shape==(4,4); '
-    'print(json.dumps({"numpy":n.__version__,"opencv-python-headless":cv2.__version__}))'
+    'print(json.dumps({"numpy":n.__version__,"opencv-python-headless":meta.version("opencv-python-headless")}))'
 )
 
 
