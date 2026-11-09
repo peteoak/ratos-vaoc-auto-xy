@@ -95,7 +95,7 @@ class Gate:
 
 class Gcode:
     def __init__(self):
-        self.handlers = {'PROCESS_GCODE_FILE': lambda gcmd: None, 'SDCARD_PRINT_FILE_BASE': lambda gcmd: None}
+        self.handlers = {'PROCESS_GCODE_FILE': lambda gcmd: None, 'SDCARD_PRINT_FILE_BASE': lambda gcmd: None, 'M23': lambda gcmd: None, 'M26': lambda gcmd: None, 'M24': lambda gcmd: None}
         self.commands = []
     def register_command(self, name, value):
         if value is None:
@@ -248,6 +248,26 @@ class RC16HandoffTests(unittest.TestCase):
         self.obj.cmd_process(Gcmd(name))
         new = self.printer.ratos.v_sd.started[-1]
         self.assertIn(b'BED_TEMP=65', (self.root / new).read_bytes())
+
+    def test_direct_m23_m26_cannot_select_or_seek_past_protection(self):
+        for name in ('M23', 'M26'):
+            with self.assertRaisesRegex(RuntimeError, 'direct SD selection/seeking blocked'):
+                self.printer.gcode.handlers[name](Gcmd())
+        # Native M24 still exists for the protected manual-VAOC hold.
+        self.assertIn('M24', self.printer.gcode.handlers)
+        self.obj.cmd_process(Gcmd())
+        self.assertEqual(len(self.printer.ratos.v_sd.started), 1)
+
+    def test_missing_sd_selection_guard_refuses_arming_and_restores_handlers(self):
+        printer = Printer(self.root)
+        del printer.gcode.handlers['M26']
+        controller = mod.AutoXYRC16Handoff(Config(printer))
+        controller.worker = WORKER
+        with self.assertRaisesRegex(RuntimeError, 'Required Klipper virtual-SD command missing'):
+            printer.handlers['klippy:ready']()
+        self.assertFalse(controller.installed)
+        self.assertIn('PROCESS_GCODE_FILE', printer.gcode.handlers)
+        self.assertIn('SDCARD_PRINT_FILE_BASE', printer.gcode.handlers)
 
     def test_direct_base_is_guarded_without_interfering_with_normal_start(self):
         self.assertIn('SDCARD_PRINT_FILE_BASE', self.printer.gcode.handlers)
