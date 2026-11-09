@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REQUIREMENTS = ROOT / 'requirements-vision-rc16.txt'
 SUPPORTED_PYTHONS = {(3, 9), (3, 10), (3, 11), (3, 12)}
-SUPPORTED_MACHINES = {'aarch64', 'armv7l', 'armv6l', 'x86_64'}
+SUPPORTED_MACHINES = {'aarch64', 'armv7l', 'x86_64'}
 EXPECTED = {'numpy': '1.26.4', 'opencv-python-headless': '4.11.0.86'}
 
 
