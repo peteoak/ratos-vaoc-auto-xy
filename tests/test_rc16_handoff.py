@@ -75,6 +75,9 @@ class RatOS:
             return False
         path = Path(self.sdcard_dirname) / name
         original = path.read_bytes()
+        if (self.dual_carriage.mode in ('copy', 'mirror')
+                and b'TOTAL_TOOLSHIFTS=5' in original):
+            return False
         if original.startswith(b'; processed by RatOS.PostProcessor'):
             raise AssertionError('Accidental double-processing')
         path.write_bytes(HEADER + META + original)
@@ -119,8 +122,14 @@ class Printer:
         self.ratos = RatOS(root, mode)
         self.gate = Gate()
         self.gcode = Gcode()
+        self.gcode.handlers['PROCESS_GCODE_FILE'] = self.native_process
         self.reactor = Reactor()
         self.handlers = {}
+    def native_process(self, gcmd):
+        name = gcmd.get('FILENAME')
+        if self.ratos.process_gcode_file(name, self.ratos.enable_gcode_transform):
+            return self.ratos.v_sd.cmd_SDCARD_PRINT_FILE(gcmd)
+
     def lookup_object(self, name, default=None):
         return {'ratos': self.ratos, 'auto_xy_gate': self.gate,
                 'gcode': self.gcode}.get(name, default)
@@ -168,12 +177,17 @@ class RC16HandoffTests(unittest.TestCase):
         self.assertIn(b'\nSTART_PRINT ', payload)
         self.assertNotIn(b'AUTOXY_PRINT_CALIBRATE', payload)
 
-    def test_copy_and_mirror_keep_native_start(self):
+    def test_copy_and_mirror_use_unmodified_native_ratos_path(self):
         for mode in ('copy', 'mirror'):
             self.printer.ratos.dual_carriage.mode = mode
             self.source.write_bytes(SINGLE + b'G1 X10\n')
+            before = set(self.root.glob('__AutoXY_RC16_*.gcode'))
+            self.obj._wait_worker = lambda *a, **k: (_ for _ in ()).throw(
+                AssertionError('COPY/MIRROR must never invoke AutoXY worker'))
             self.obj.cmd_process(Gcmd())
             name = self.printer.ratos.v_sd.started[-1]
+            self.assertEqual(name, 'part.gcode')
+            self.assertEqual(before, set(self.root.glob('__AutoXY_RC16_*.gcode')))
             payload = (self.root / name).read_bytes()
             self.assertIn(b'\nSTART_PRINT ', payload)
             self.assertNotIn(b'AUTOXY_PRINT_CALIBRATE', payload)
