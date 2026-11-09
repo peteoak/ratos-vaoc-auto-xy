@@ -287,7 +287,9 @@ def main(argv=None):
     root = Path(__file__).resolve().parents[1]
     home = args.home.absolute()
     try:
-        if not args.offline:
+        if args.offline:
+            require(home != HOME, 'Offline mode is test-only; refusing live /home/pi')
+        else:
             require(home == HOME, 'Live staging only supports /home/pi')
         if args.rollback:
             require(args.confirm == 'ROLLBACK_RC16_DEV1',
