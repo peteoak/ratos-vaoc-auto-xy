@@ -264,19 +264,91 @@ def prepare(root, stage_name, mode):
         tmp.unlink(missing_ok=True)
 
 
+
+def verify(root, stage_name, mode, expected_hash):
+    """Post-transform immutable-fingerprint check; never authorises a print."""
+    if mode not in ('independent', 'copy', 'mirror'):
+        raise Refuse('Unknown physical mode')
+    if not re.fullmatch('[0-9a-f]{64}', expected_hash or ''):
+        raise Refuse('Invalid expected output digest')
+    path = safe_path(root, stage_name, generated=True)
+    digest = hashlib.sha256()
+    count = marker_count = begin = end = 0
+    read_bytes = 0
+    shifts = None
+    with open_reader(path) as reader:
+        before = os.fstat(reader.fileno())
+        if not stat.S_ISREG(before.st_mode) or identity(before) != identity(path.stat()):
+            raise Refuse('Verified input changed')
+        for lineno, line in enumerate(lines(reader), 1):
+            plain = line.rstrip(b'\r\n')
+            digest.update(line)
+            read_bytes += len(line)
+            if lineno == 1 and not HEADER.fullmatch(plain):
+                raise Refuse('RatOS header changed')
+            if lineno != 1 and HEADER_ANY.match(plain):
+                raise Refuse('Duplicate RatOS header')
+            begin += bool(plain.startswith(b'; ratos_meta begin '))
+            end += bool(plain.startswith(b'; ratos_meta end '))
+            marker_count += bool(plain == MARKER)
+            if START.match(plain):
+                count += 1
+                _, shifts, _ = parse_start(line)
+            if plain.startswith(b'AUTOXY_PRINT_BEGIN') and marker_count != 1:
+                raise Refuse('Unexpected AutoXY command')
+        after = os.fstat(reader.fileno())
+    if identity(before) != identity(after) or identity(before) != identity(path.stat()):
+        raise Refuse('Prepared file modified during verification')
+    if begin != 1 or end != 1:
+        raise Refuse('Missing RatOS metadata')
+    if digest.hexdigest() != expected_hash:
+        raise Refuse('Prepared file digest changed')
+    if mode == 'independent' and marker_count == 1:
+        # Protected file REPLACES START_PRINT with a fixed set of commands.
+        if count != 0:
+            raise Refuse('Protected G-code still contains native START_PRINT')
+        with open_reader(path) as reader:
+            # Avoid reading the whole file; validate required command presence
+            # and exact cardinality with one bounded-memory stream.
+            cmds = {key: 0 for key in (
+                b'AUTOXY_PRINT_BEGIN', b'AUTOXY_PRINT_PREPARE',
+                b'AUTOXY_PRINT_CALIBRATE', b'AUTOXY_PRINT_HOLD',
+                b'AUTOXY_PRINT_CHECK', b'AUTOXY_PRINT_FINISH')}
+            for line in lines(reader):
+                key = line.strip().split(b' ', 1)[0]
+                if key in cmds:
+                    cmds[key] += 1
+            if any(v != 1 for v in cmds.values()):
+                raise Refuse('Missing or duplicate protected gate command')
+        protected = True
+    else:
+        if marker_count or count != 1:
+            raise Refuse('Unprotected G-code has unsafe start')
+        protected = False
+    return {'status': 'VERIFIED_NOT_AUTHORIZED', 'stage_name': stage_name,
+            'mode': mode, 'protected': protected, 'sha256': expected_hash,
+            'fingerprint': [before.st_dev, before.st_ino, before.st_size,
+                            before.st_mtime_ns, before.st_ctime_ns],
+            'bytes_read': read_bytes}
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=('stage','prepare'))
+    parser.add_argument('action', choices=('stage','prepare','verify'))
     parser.add_argument('--root', required=True)
     parser.add_argument('--source', required=True)
     parser.add_argument('--mode', choices=('independent','copy','mirror'))
+    parser.add_argument('--expected-sha256')
     args = parser.parse_args(argv)
     try:
         # Only this AutoXY worker is deprioritised. RatOS is never a child.
         if hasattr(os, 'nice'):
             os.nice(10)
-        result = stage(args.root, args.source) if args.action == 'stage' else prepare(
-            args.root, args.source, args.mode)
+        if args.action == 'stage':
+            result = stage(args.root, args.source)
+        elif args.action == 'prepare':
+            result = prepare(args.root, args.source, args.mode)
+        else:
+            result = verify(args.root, args.source, args.mode, args.expected_sha256)
         print(json.dumps(result, separators=(',', ':')))
         return 0
     except (Refuse, OSError, UnicodeError, ValueError) as error:
