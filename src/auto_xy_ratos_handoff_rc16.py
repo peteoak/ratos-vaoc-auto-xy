@@ -138,6 +138,11 @@ class AutoXYRC16Handoff:
                 except subprocess.TimeoutExpired:
                     proc.kill()
                     proc.wait()
+            # Do not leak pipes into a long-running Klipper process.
+            if proc.stdout is not None:
+                proc.stdout.close()
+            if proc.stderr is not None:
+                proc.stderr.close()
 
     def _mode(self):
         status = self.ratos.dual_carriage.get_status(
