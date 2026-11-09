@@ -89,6 +89,7 @@ class AutoXYRC16Handoff:
             self.gcode.register_command('SDCARD_PRINT_FILE_BASE', old_base)
             raise
         self._native_base = old_base
+        self._native_processor = old_processor
         self.ratos, self.gate = ratos, gate
         self.installed = True
 
@@ -170,6 +171,13 @@ class AutoXYRC16Handoff:
         stage_name = None
         handed_to_sd = False
         try:
+            # COPY/MIRROR cannot require independent nozzle XY alignment.
+            # Preserve native RatOS processing end-to-end with no AutoXY file
+            # copies, digests or subprocesses. Classify BEFORE RatOS startup
+            # temporarily resets the carriage to single mode.
+            initial_mode = self._mode()
+            if initial_mode in ('copy', 'mirror'):
+                return self._native_processor(gcmd)
             # Native RatOS bypass/transform options cannot guarantee safe
             # independent IDEX preparation; do not guess an unseen print mode.
             if self.ratos.bypass_post_processing or not self.ratos.enable_gcode_transform:
@@ -199,6 +207,8 @@ class AutoXYRC16Handoff:
                 if not self.ratos.process_gcode_file(stage_name, self.ratos.enable_gcode_transform):
                     raise CoordinatorError('Native RatOS processor rejected staged file')
             mode = self._mode()
+            if mode != initial_mode:
+                raise CoordinatorError('IDEX mode changed during file preparation')
             prepared = self._wait_worker('prepare', root, stage_name, mode)
             if prepared.get('stage_name') != stage_name or prepared.get('mode') != mode:
                 raise CoordinatorError('Worker result identity or mode mismatch')
