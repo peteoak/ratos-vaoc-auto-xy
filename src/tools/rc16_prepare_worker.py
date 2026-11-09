@@ -331,13 +331,99 @@ def verify(root, stage_name, mode, expected_hash):
                             before.st_mtime_ns, before.st_ctime_ns],
             'bytes_read': read_bytes}
 
+
+def registry_directory(registry):
+    folder = Path(registry).absolute()
+    if folder.is_symlink():
+        raise Refuse('Unsafe registry directory')
+    folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if not folder.is_dir() or folder.is_symlink():
+        raise Refuse('Invalid registry directory')
+    return folder
+
+
+def registry_key(filename):
+    if not re.fullmatch(re.escape(PREFIX) + r'[0-9a-f]{24}\.gcode', filename):
+        raise Refuse('Invalid generated filename token')
+    return filename[len(PREFIX):-len('.gcode')]
+
+
+def register_source(root, stage_name, original, src_sha, final_sha, registry):
+    """Record source mapping only AFTER a complete independent verification."""
+    if not re.fullmatch(r'[0-9a-f]{64}', src_sha or '') or not re.fullmatch(r'[0-9a-f]{64}', final_sha or ''):
+        raise Refuse('Invalid registry digest')
+    stage_path = safe_path(root, stage_name, generated=True)
+    src_path = safe_path(root, original)
+    root_path = Path(root).absolute()
+    if not src_path.is_relative_to(root_path):
+        raise Refuse('Source outside SD root')
+    # Read-only stream verifying output before recording, no hashing in Klipper.
+    digest = hashlib.sha256()
+    with open_reader(stage_path) as reader:
+        before = os.fstat(reader.fileno())
+        for block in iter(lambda: reader.read(CHUNK), b''):
+            digest.update(block)
+        after = os.fstat(reader.fileno())
+    if identity(before) != identity(after) or identity(before) != identity(stage_path.stat()):
+        raise Refuse('Generated G-code changed during registry validation')
+    if digest.hexdigest() != final_sha:
+        raise Refuse('Generated G-code digest mismatch')
+    relative = str(src_path.relative_to(root_path))
+    record = {'stage_name': stage_name, 'source': relative,
+              'source_sha256': src_sha, 'output_sha256': final_sha,
+              'schema': 1}
+    path = registry_directory(registry) / (registry_key(stage_name) + '.json')
+    data = json.dumps(record, sort_keys=True, separators=(',', ':')).encode('utf-8')
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0), 0o600)
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return {'status': 'REGISTERED_NOT_AUTHORIZED', 'stage_name': stage_name,
+            'output_sha256': final_sha}
+
+
+def resolve_source(root, stage_name, registry):
+    """Verified reprints re-run from the ORIGINAL source, never old AutoXY G-code."""
+    stage_path = safe_path(root, stage_name, generated=True)
+    key = registry_key(stage_name)
+    rec_file = registry_directory(registry) / (key + '.json')
+    if rec_file.is_symlink() or not rec_file.is_file() or rec_file.stat().st_size > 4096:
+        raise Refuse('Missing or unsafe reprint registry entry')
+    record = json.loads(rec_file.read_text(encoding='utf-8'))
+    if (record.get('schema') != 1 or record.get('stage_name') != stage_name
+            or not isinstance(record.get('source'), str)
+            or not re.fullmatch(r'[0-9a-f]{64}', record.get('output_sha256', ''))):
+        raise Refuse('Registry entry mismatched')
+    src_path = safe_path(root, record['source'])
+    current = hashlib.sha256()
+    with open_reader(stage_path) as reader:
+        before = os.fstat(reader.fileno())
+        for block in iter(lambda: reader.read(CHUNK), b''):
+            current.update(block)
+        after = os.fstat(reader.fileno())
+    if (identity(before) != identity(after) or identity(before) != identity(stage_path.stat())
+            or current.hexdigest() != record['output_sha256']):
+        raise Refuse('Previously generated file changed; refuse reprint')
+    # Original source may have been re-sliced/updated; stage() independently
+    # fingerprints its current content before the NEW protected print starts.
+    return {'status': 'RESOLVED_NOT_AUTHORIZED', 'source': record['source'],
+            'stage_name': stage_name}
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=('stage','prepare','verify'))
+    parser.add_argument('action', choices=('stage','prepare','verify','register','resolve'))
     parser.add_argument('--root', required=True)
     parser.add_argument('--source', required=True)
     parser.add_argument('--mode', choices=('independent','copy','mirror'))
     parser.add_argument('--expected-sha256')
+    parser.add_argument('--registry')
+    parser.add_argument('--original')
+    parser.add_argument('--source-sha256')
     args = parser.parse_args(argv)
     try:
         # Only this AutoXY worker is deprioritised. RatOS is never a child.
@@ -347,8 +433,17 @@ def main(argv=None):
             result = stage(args.root, args.source)
         elif args.action == 'prepare':
             result = prepare(args.root, args.source, args.mode)
-        else:
+        elif args.action == 'verify':
             result = verify(args.root, args.source, args.mode, args.expected_sha256)
+        elif args.action == 'register':
+            if not args.registry or not args.original:
+                raise Refuse('Missing source registry information')
+            result = register_source(args.root, args.source, args.original, args.source_sha256,
+                                     args.expected_sha256, args.registry)
+        else:
+            if not args.registry:
+                raise Refuse('Missing registry directory')
+            result = resolve_source(args.root, args.source, args.registry)
         print(json.dumps(result, separators=(',', ':')))
         return 0
     except (Refuse, OSError, UnicodeError, ValueError) as error:
