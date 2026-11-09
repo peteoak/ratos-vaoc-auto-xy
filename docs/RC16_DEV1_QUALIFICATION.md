@@ -19,7 +19,16 @@ This is the integrated RC16 development line, in [draft PR #8](https://github.co
 
 **Existing RC15 Dev6 installation:** the RC16 staging utility only accepts an exact, unmodified RC15 Dev6 controller and a disabled protected-print configuration. It refuses unknown local patches, active VAOC, prints, hot heaters, faults and uncertain registration, rather than guessing whether a migration is safe.
 
-**First-time tester:** the RC16 branch has **no supported one-step fresh installer** yet. An administrator can establish a separately validated RC15 Dev6 baseline using its normal fresh installer and commissioner, then investigate staged RC16. Do not represent this as an ordinary RC16 quick-start install.
+**First-time tester:** `scripts/rc16_fresh_install.py` now provides a transactional, **default-OFF** fresh installer by reusing the vetted RC15 Dev6 fresh installation process, then staging the pinned RC16 extras before restarting Klipper. Its rollback receipt ties together BOTH snapshots. It requires a separately prepared, verified NumPy/OpenCV vision environment and has only passed offline simulation; it is **not yet a supported public quick-start installer**.
+
+Read-only fresh-host preflight for a reviewed, cool and idle, genuinely clean RatOS 2.1 IDEX machine:
+
+```bash
+python3 scripts/vision_env.py --check --venv /home/pi/auto-xy-venv
+python3 scripts/rc16_fresh_install.py --check
+```
+
+The fresh installer requires explicit `FRESH_RC16_DEV1_DISABLED` approval for installation and `ROLLBACK_FRESH_RC16_DEV1` plus its own snapshot for rollback. **Do not run those commands on a production printer before supervised qualification.**
 
 No command in this document enables automatic file interception. Activation requires a reviewed printer-specific qualification plan and a known-working native VAOC/manual recovery route.
 
@@ -46,7 +55,7 @@ The staging and rollback operations are intentionally separate from `--check`. S
 7. **Long-running work:** at least two representative large slicer files; compare RatOS-only baseline with RC16 full path while host is busy. Record any Klipper stats gap, Klippy CPU usage, peak RSS, and `Timer too close` or transport errors. Stop if MCU timing becomes unreliable.
 8. **Resource/retention failure cases:** disk near full, worker timeout/termination, interrupted staging, output mutation, stale registry, and cleanup run while idle vs active. No unknown file deletion. Test rollback after Klipper restart.
 9. **Cross-host beta testers:** pinned wheel availability on the actual Raspberry Pi OS/Python/architecture combinations; compile/import OpenCV plus a real capture through the stock VAOC camera. The GitHub x86 CI matrix does not test ARM wheels.
-10. **Release packaging and legal:** finish versioned RC16 fresh installer, capture RC16 manifest/checksums for final package, reconcile upstream RatOS macro provenance and copyright notices, and only then propose a public development release/tag.
+10. **Release packaging and legal:** qualify the newly staged RC16 fresh installer on real hardware, capture RC16 manifest/checksums for final package, reconcile upstream RatOS macro provenance and copyright notices, and only then propose a public development release/tag.
 
 ### Release decision
 
