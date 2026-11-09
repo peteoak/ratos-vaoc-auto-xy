@@ -88,6 +88,28 @@ class AutoXYRC16Handoff:
             self.gcode.register_command('SDCARD_PRINT_FILE_BASE', None)
             self.gcode.register_command('SDCARD_PRINT_FILE_BASE', old_base)
             raise
+        # M23 directly selects files without passing PROCESS_GCODE_FILE.
+        # M26 can seek past the protected gate in a paused file. Neither is
+        # safe while this opt-in coordinator is armed. Do not intercept M24:
+        # it is required for supervised guarded manual VAOC continuation.
+        installed = []
+        try:
+            for name in ('M23', 'M26'):
+                old_handler = self.gcode.register_command(name, None)
+                if old_handler is None:
+                    raise self.printer.config_error(
+                        'Required Klipper virtual-SD command missing: ' + name)
+                installed.append((name, old_handler))
+                self.gcode.register_command(name, self.cmd_direct_selection)
+        except Exception:
+            for name, old_handler in reversed(installed):
+                self.gcode.register_command(name, None)
+                self.gcode.register_command(name, old_handler)
+            self.gcode.register_command('PROCESS_GCODE_FILE', None)
+            self.gcode.register_command('PROCESS_GCODE_FILE', old_processor)
+            self.gcode.register_command('SDCARD_PRINT_FILE_BASE', None)
+            self.gcode.register_command('SDCARD_PRINT_FILE_BASE', old_base)
+            raise
         self._native_base = old_base
         self._native_processor = old_processor
         self.ratos, self.gate = ratos, gate
@@ -99,6 +121,9 @@ class AutoXYRC16Handoff:
         # Normal Mainsail starts go through the public RatOS macro and are
         # unchanged for single-tool, COPY and MIRROR files.
         raise gcmd.error('RC16 protected mode: use normal SDCARD_PRINT_FILE through RatOS, not SDCARD_PRINT_FILE_BASE')
+
+    def cmd_direct_selection(self, gcmd):
+        raise gcmd.error('RC16 protected mode: direct SD selection/seeking blocked; use normal RatOS file start')
 
     def _wait_worker(self, action, root, filename, mode=None, expected_hash=None, original=None, source_hash=None):
         argv = [self.worker_python, str(self.worker), action,
@@ -115,7 +140,7 @@ class AutoXYRC16Handoff:
             argv.extend(['--source-sha256', source_hash])
         # Never inherit RatOS's resource settings: only the worker lowers its
         # OWN priority, and RatOS is called separately from the coordinator.
-        proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         reactor = self.printer.get_reactor()
         finish = reactor.monotonic() + 180.0
         try:
