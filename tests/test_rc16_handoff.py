@@ -143,6 +143,7 @@ class RC16HandoffTests(unittest.TestCase):
         self.obj = mod.AutoXYRC16Handoff(Config(self.printer))
         self.obj.worker = WORKER
         self.obj.worker_python = sys.executable
+        self.obj.registry = self.root / 'registry'
         self.printer.handlers['klippy:ready']()
         self.assertTrue(self.obj.installed)
 
@@ -204,12 +205,34 @@ class RC16HandoffTests(unittest.TestCase):
         self.assertIn(b'AUTOXY_PRINT_CALIBRATE',
                       (self.root / self.printer.ratos.v_sd.started[0]).read_bytes())
 
-    def test_generated_file_reprint_does_not_bypass_origin(self):
+    def test_generated_file_reprint_reprocesses_original(self):
+        before = self.source.read_bytes()
+        self.obj.cmd_process(Gcmd())
+        previous = self.printer.ratos.v_sd.started[-1]
+        self.obj.cmd_process(Gcmd(previous))
+        current = self.printer.ratos.v_sd.started[-1]
+        self.assertNotEqual(previous, current)
+        self.assertEqual(len(self.printer.ratos.processed), 2)
+        self.assertEqual(self.source.read_bytes(), before)
+        self.assertIn(b'AUTOXY_PRINT_CALIBRATE',
+                      (self.root / current).read_bytes())
+
+    def test_generated_file_changed_reprint_refused(self):
         self.obj.cmd_process(Gcmd())
         name = self.printer.ratos.v_sd.started[-1]
+        with open(self.root / name, 'ab') as stream:
+            stream.write(b'; tampered\n')
         with self.assertRaises(RuntimeError):
             self.obj.cmd_process(Gcmd(name))
         self.assertEqual(len(self.printer.ratos.v_sd.started), 1)
+
+    def test_original_modified_before_reprint_uses_new_source(self):
+        self.obj.cmd_process(Gcmd())
+        name = self.printer.ratos.v_sd.started[-1]
+        self.source.write_bytes(START.replace(b'BED_TEMP=60', b'BED_TEMP=65') + b'G1 X77\n')
+        self.obj.cmd_process(Gcmd(name))
+        new = self.printer.ratos.v_sd.started[-1]
+        self.assertIn(b'BED_TEMP=65', (self.root / new).read_bytes())
 
     def test_direct_base_is_guarded_without_interfering_with_normal_start(self):
         self.assertIn('SDCARD_PRINT_FILE_BASE', self.printer.gcode.handlers)
@@ -229,8 +252,8 @@ class RC16HandoffTests(unittest.TestCase):
 
     def test_file_change_detected_after_last_check(self):
         original_wait = self.obj._wait_worker
-        def injected_wait(action, root, filename, mode=None, expected_hash=None):
-            result = original_wait(action, root, filename, mode, expected_hash)
+        def injected_wait(action, root, filename, mode=None, expected_hash=None, original=None, source_hash=None):
+            result = original_wait(action, root, filename, mode, expected_hash, original, source_hash)
             if action == 'verify':
                 with open(Path(root) / filename, 'ab') as out:
                     out.write(b'; tampered\n')
