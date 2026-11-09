@@ -192,10 +192,11 @@ class RC16HandoffTests(unittest.TestCase):
             self.assertIn(b'\nSTART_PRINT ', payload)
             self.assertNotIn(b'AUTOXY_PRINT_CALIBRATE', payload)
 
-    def test_copy_with_toolshift_refuses_to_print(self):
+    def test_copy_with_toolshift_refuses_in_native_ratos(self):
         self.printer.ratos.dual_carriage.mode = 'copy'
-        with self.assertRaises(RuntimeError):
-            self.obj.cmd_process(Gcmd())
+        # RatOS returns False and does not open virtual SD; no need for
+        # the AutoXY handoff to reinterpret its native rejection.
+        self.obj.cmd_process(Gcmd())
         self.assertEqual(self.printer.ratos.v_sd.started, [])
 
     def test_unrecognised_mode_refuses(self):
