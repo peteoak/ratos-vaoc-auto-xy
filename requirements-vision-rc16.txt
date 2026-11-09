@@ -1,0 +1,4 @@
+# RC16 development candidate: coherent ABI pair for trial on supported Pi architectures.
+# Binary wheels only; see scripts/vision_env.py. Not yet hardware validated.
+numpy==1.26.4
+opencv-python-headless==4.11.0.86
