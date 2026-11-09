@@ -43,6 +43,7 @@ class AutoXYRC16Handoff:
         self.enabled = config.getboolean('enabled', False)
         self.worker = Path(config.get('worker', '/home/pi/auto_xy/workers/rc16_prepare_worker.py'))
         self.worker_python = config.get('worker_python', sys.executable)
+        self.registry = Path(config.get('registry_directory', '/home/pi/auto_xy/rc16_registry'))
         self.installed = False
         self.busy = False
         self.gcode.register_command('AUTOXY_RC16_HANDOFF_STATUS', self.cmd_status)
@@ -98,13 +99,19 @@ class AutoXYRC16Handoff:
         # unchanged for single-tool, COPY and MIRROR files.
         raise gcmd.error('RC16 protected mode: use normal SDCARD_PRINT_FILE through RatOS, not SDCARD_PRINT_FILE_BASE')
 
-    def _wait_worker(self, action, root, filename, mode=None, expected_hash=None):
+    def _wait_worker(self, action, root, filename, mode=None, expected_hash=None, original=None, source_hash=None):
         argv = [self.worker_python, str(self.worker), action,
                 '--root', str(root), '--source', filename]
         if mode is not None:
             argv.extend(['--mode', mode])
         if expected_hash is not None:
             argv.extend(['--expected-sha256', expected_hash])
+        if action in ('register', 'resolve'):
+            argv.extend(['--registry', str(self.registry)])
+        if original is not None:
+            argv.extend(['--original', original])
+        if source_hash is not None:
+            argv.extend(['--source-sha256', source_hash])
         # Never inherit RatOS's resource settings: only the worker lowers its
         # OWN priority, and RatOS is called separately from the coordinator.
         proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -126,7 +133,9 @@ class AutoXYRC16Handoff:
             result = json.loads(raw)
             expected = {'stage': 'STAGED_NOT_AUTHORIZED',
                         'prepare': 'PREPARED_NOT_AUTHORIZED',
-                        'verify': 'VERIFIED_NOT_AUTHORIZED'}[action]
+                        'verify': 'VERIFIED_NOT_AUTHORIZED',
+                        'register': 'REGISTERED_NOT_AUTHORIZED',
+                        'resolve': 'RESOLVED_NOT_AUTHORIZED'}[action]
             if result.get('status') != expected:
                 raise CoordinatorError('Unrecognised AutoXY worker result')
             return result
@@ -167,10 +176,15 @@ class AutoXYRC16Handoff:
                 raise CoordinatorError('Native RatOS transform or postprocessor bypass is enabled')
             root = Path(self.ratos.sdcard_dirname)
             original = gcmd.get('FILENAME', '')
-            # Reprint of generated RC16 file needs registry resolution and must
-            # NEVER be sent through the postprocessor again as a new source.
+            # Reprints of generated files must be independently verified and
+            # mapped back to the ORIGINAL, which is freshly prepared.
             if Path(original).name.startswith('__AutoXY_RC16_'):
-                raise CoordinatorError('Generated file reprint needs verified source registry; select original')
+                resolved = self._wait_worker('resolve', root, original)
+                if resolved.get('stage_name') != original:
+                    raise CoordinatorError('Reprint registry resolution mismatch')
+                original = resolved.get('source')
+                if not isinstance(original, str) or not original:
+                    raise CoordinatorError('Missing safe reprint origin')
             staged = self._wait_worker('stage', root, original)
             stage_name = staged.get('stage_name')
             if not isinstance(stage_name, str) or not STAGED.fullmatch(stage_name):
@@ -215,6 +229,13 @@ class AutoXYRC16Handoff:
             fingerprint = [st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns]
             if fingerprint != verified.get('fingerprint') or path.is_symlink():
                 raise CoordinatorError('Prepared file changed before virtual-SD handoff')
+            # Establish reprint identity in the low-priority worker BEFORE SD
+            # opens the file; reject if registry persistence fails.
+            registered = self._wait_worker(
+                'register', root, stage_name, expected_hash=final_hash,
+                original=original, source_hash=staged.get('source_sha256'))
+            if registered.get('stage_name') != stage_name or registered.get('output_sha256') != final_hash:
+                raise CoordinatorError('Registry entry mismatch; no print')
             # Arm the one-use protected controller ONLY for eligible dual-tool
             # independent prints (the six injected macros enforce the hold).
             handed_to_sd = True
