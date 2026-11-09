@@ -101,3 +101,14 @@ Set numerical resource ceilings only after representative measurements on actual
 - **M6 / acceptance:** offline stress + supervised machine validation; only then update release metadata and consider a development tag.
 
 **Explicit non-goals:** modifying stock RatOS; degrading native RatOS throughput; applying CPU limits to Klipper; automatically launching an unverified print; changing owner calibration offsets; or publishing private diagnostic data.
+
+
+## 7. 2026-11-09 eligibility clarification and implementation boundary
+
+**AutoXY calibration is required only for a genuine independent IDEX print using both nozzles/toolheads.** A single-tool T0 or T1 print, and a COPY or MIRROR print, must follow ordinary RatOS without invoking automatic XY calibration. This distinction applies equally to initial prints and reprints. Mode and tool-use classification must be positively established; a contradictory or unknown independent two-tool job fails closed.
+
+The branch now includes experimental `src/tools/rc16_prepare_worker.py` and `src/auto_xy_ratos_handoff_rc16.py` with simulated tests, **not an installed or qualified release**. The worker performs expensive G-code staging, transformation and hashing outside Klipper at reduced scheduling priority; the coordinator leaves native `ratos.process_gcode_file` unchanged. The audited RatOS implementation already yields to the reactor while its native CLI runs.
+
+The coordinator guards the known `SDCARD_PRINT_FILE_BASE` bypass when enabled. It preserves normal `SDCARD_PRINT_FILE → PROCESS_GCODE_FILE` behaviour for ordinary print modes, but **other Klipper/Moonraker virtual-SD entrypoints remain a live qualification requirement**. No blanket assertion that all possible bypass paths are covered is justified.
+
+The prototype also deliberately rejects direct reprints of generated RC16 files until a verified source registry is implemented. Installer activation is not wired; no changes to `main` or the owner's installed RC15 are permitted until end-to-end validation.
