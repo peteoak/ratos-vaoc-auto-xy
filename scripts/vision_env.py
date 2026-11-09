@@ -6,7 +6,6 @@ existing venv. Existing venv problems are diagnosed, never auto-repaired.
 """
 import argparse
 import json
-import os
 import platform
 import shutil
 import subprocess
@@ -98,27 +97,34 @@ def install_new_venv(venv, requirements=REQUIREMENTS):
     if not venv.parent.is_dir() or venv.parent.is_symlink():
         raise VisionSetupError('Vision venv parent must be an existing, non-symlink directory')
     # Separate temporary environment avoids exposing a partially installed final path.
-    stage = Path(tempfile.mkdtemp(prefix='.auto-xy-vision-stage-', dir=str(venv.parent)))
+    stage = Path(tempfile.mkdtemp(prefix='.auto-xy-vision-download-', dir=str(venv.parent)))
+    created = False
     try:
-        run_checked([sys.executable, '-m', 'venv', str(stage)], timeout=90)
-        python = stage / 'bin/python'
+        # Never relocate a venv: pip entrypoints contain absolute shebang paths.
         wheels = stage / 'wheelhouse'
         wheels.mkdir()
+        # Use a temporary download environment so the system Python need not have pip.
+        downloader = stage / 'downloader'
+        run_checked([sys.executable, '-m', 'venv', str(downloader)], timeout=90)
+        downloader_python = downloader / 'bin/python'
         # Download binary wheels first. Never let pip silently compile OpenCV on a Pi.
-        run_checked([str(python), '-m', 'pip', '--disable-pip-version-check', 'download',
+        run_checked([str(downloader_python), '-m', 'pip', '--disable-pip-version-check', 'download',
                      '--only-binary=:all:', '--dest', str(wheels),
                      '-r', str(requirements)], timeout=300)
+        if venv.exists() or venv.is_symlink():
+            raise VisionSetupError('Target venv appeared while downloading; refusing replacement')
+        run_checked([sys.executable, '-m', 'venv', str(venv)], timeout=90)
+        created = True
+        python = venv / 'bin/python'
         run_checked([str(python), '-m', 'pip', '--disable-pip-version-check', 'install',
                      '--no-index', '--only-binary=:all:', '--find-links', str(wheels),
                      '-r', str(requirements)], timeout=300)
-        verify_vision_env(stage, requirements)
-        shutil.rmtree(wheels)
-        # os.rename refuses replacement of a nonempty destination; recheck first.
-        if venv.exists() or venv.is_symlink():
-            raise VisionSetupError('Target venv appeared while staging; refusing replacement')
-        os.rename(stage, venv)
-        return {'host': host, 'versions': verify_vision_env(venv, requirements)}
+        verified = verify_vision_env(venv, requirements)
+        created = False  # Installation is complete: leave the new environment in place.
+        return {'host': host, 'versions': verified}
     finally:
+        if created and venv.is_dir() and not venv.is_symlink():
+            shutil.rmtree(venv)
         if stage.exists():
             shutil.rmtree(stage)
 
