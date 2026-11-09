@@ -131,6 +131,10 @@ def stage(root, filename):
     tmp = dest.with_name('.' + dest.name + '.partial')
     h = hashlib.sha256()
     total = 0
+    meta_begin = meta_end = 0
+    header_seen = None
+    line_count = 0
+    tail = b''
     started = time.monotonic()
     try:
         with open_reader(source) as stream:
@@ -144,14 +148,46 @@ def stage(root, filename):
                     h.update(block)
                     out.write(block)
                     total += len(block)
+                    tail += block
+                    while b'\n' in tail:
+                        line, tail = tail.split(b'\n', 1)
+                        if len(line) > MAX_LINE:
+                            raise Refuse('Overlong source G-code line')
+                        plain = line.rstrip(b'\r')
+                        if line_count == 0:
+                            header_seen = 'supported' if HEADER.fullmatch(plain) else ('unsupported' if HEADER_ANY.match(plain) else 'raw')
+                        elif HEADER_ANY.match(plain):
+                            raise Refuse('Additional RatOS header')
+                        if MARKER in plain or AUTOXY.match(plain):
+                            raise Refuse('Already protected source')
+                        meta_begin += bool(plain.startswith(b'; ratos_meta begin '))
+                        meta_end += bool(plain.startswith(b'; ratos_meta end '))
+                        line_count += 1
+                    if len(tail) > MAX_LINE:
+                        raise Refuse('Overlong source G-code line')
                 out.flush()
                 os.fsync(out.fileno())
+            if tail:
+                if len(tail) > MAX_LINE:
+                    raise Refuse('Overlong final line')
+                plain = tail.rstrip(b'\r')
+                if line_count == 0:
+                    header_seen = 'supported' if HEADER.fullmatch(plain) else ('unsupported' if HEADER_ANY.match(plain) else 'raw')
+                if MARKER in plain or AUTOXY.match(plain):
+                    raise Refuse('Already protected source')
+                meta_begin += bool(plain.startswith(b'; ratos_meta begin '))
+                meta_end += bool(plain.startswith(b'; ratos_meta end '))
+            if header_seen == 'unsupported' or (header_seen == 'supported' and (meta_begin != 1 or meta_end != 1)):
+                raise Refuse('Unsupported RatOS processed source')
+            if header_seen == 'raw' and (meta_begin or meta_end):
+                raise Refuse('Unexpected RatOS metadata in raw source')
             if (identity(before) != identity(os.fstat(stream.fileno()))
                     or identity(before) != identity(source.stat())
                     or total != before.st_size):
                 raise Refuse('Source changed while staging')
         os.replace(tmp, dest)
         return {'status': 'STAGED_NOT_AUTHORIZED', 'stage_name': dest.name,
+                'already_ratos_processed': header_seen == 'supported',
                 'source_sha256': h.hexdigest(), 'bytes_read': total,
                 'elapsed_ms': round((time.monotonic()-started)*1000, 2)}
     finally:
