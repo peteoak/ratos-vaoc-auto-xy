@@ -63,18 +63,40 @@ class AutoXYRC16Handoff:
             raise self.printer.config_error('RatOS process API does not match audited version')
         if not self.worker.is_file() or self.worker.is_symlink():
             raise self.printer.config_error('RC16 worker not installed at a trusted regular path')
-        # Guard an obvious bypass command, but this does NOT prove all possible
-        # virtual-SD/Moonraker entrypoints have been intercepted.
+        # RatOS 2.1 macro: SDCARD_PRINT_FILE -> PROCESS_GCODE_FILE,
+        # while SDCARD_PRINT_FILE_BASE is the lower-level renamed primitive.
+        # Direct use of that primitive must not bypass protected printing.
+        old_base = self.gcode.register_command('SDCARD_PRINT_FILE_BASE', None)
+        if old_base is None:
+            raise self.printer.config_error(
+                'RatOS SDCARD_PRINT_FILE_BASE command not present; cannot guard bypass')
+        try:
+            self.gcode.register_command('SDCARD_PRINT_FILE_BASE', self.cmd_direct_base)
+        except Exception:
+            self.gcode.register_command('SDCARD_PRINT_FILE_BASE', old_base)
+            raise
         old_processor = self.gcode.register_command('PROCESS_GCODE_FILE', None)
         if old_processor is None:
+            self.gcode.register_command('SDCARD_PRINT_FILE_BASE', None)
+            self.gcode.register_command('SDCARD_PRINT_FILE_BASE', old_base)
             raise self.printer.config_error('Native RatOS PROCESS_GCODE_FILE command missing')
         try:
             self.gcode.register_command('PROCESS_GCODE_FILE', self.cmd_process)
         except Exception:
             self.gcode.register_command('PROCESS_GCODE_FILE', old_processor)
+            self.gcode.register_command('SDCARD_PRINT_FILE_BASE', None)
+            self.gcode.register_command('SDCARD_PRINT_FILE_BASE', old_base)
             raise
+        self._native_base = old_base
         self.ratos, self.gate = ratos, gate
         self.installed = True
+
+    def cmd_direct_base(self, gcmd):
+        # A direct primitive invocation skips RatOS and hides IDEX mode.
+        # Reject instead of silently running an independent two-tool job.
+        # Normal Mainsail starts go through the public RatOS macro and are
+        # unchanged for single-tool, COPY and MIRROR files.
+        raise gcmd.error('RC16 protected mode: use normal SDCARD_PRINT_FILE through RatOS, not SDCARD_PRINT_FILE_BASE')
 
     def _wait_worker(self, action, root, filename, mode=None, expected_hash=None):
         argv = [self.worker_python, str(self.worker), action,
