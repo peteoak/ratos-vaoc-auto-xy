@@ -92,7 +92,7 @@ class Gate:
 
 class Gcode:
     def __init__(self):
-        self.handlers = {'PROCESS_GCODE_FILE': lambda gcmd: None}
+        self.handlers = {'PROCESS_GCODE_FILE': lambda gcmd: None, 'SDCARD_PRINT_FILE_BASE': lambda gcmd: None}
         self.commands = []
     def register_command(self, name, value):
         if value is None:
@@ -209,6 +209,14 @@ class RC16HandoffTests(unittest.TestCase):
         name = self.printer.ratos.v_sd.started[-1]
         with self.assertRaises(RuntimeError):
             self.obj.cmd_process(Gcmd(name))
+        self.assertEqual(len(self.printer.ratos.v_sd.started), 1)
+
+    def test_direct_base_is_guarded_without_interfering_with_normal_start(self):
+        self.assertIn('SDCARD_PRINT_FILE_BASE', self.printer.gcode.handlers)
+        with self.assertRaisesRegex(RuntimeError, 'normal SDCARD_PRINT_FILE'):
+            self.printer.gcode.handlers['SDCARD_PRINT_FILE_BASE'](Gcmd())
+        self.assertEqual(self.printer.ratos.v_sd.started, [])
+        self.obj.cmd_process(Gcmd())
         self.assertEqual(len(self.printer.ratos.v_sd.started), 1)
 
     def test_bypass_or_transform_disabled_refuses(self):
