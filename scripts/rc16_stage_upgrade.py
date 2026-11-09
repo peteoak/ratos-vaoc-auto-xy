@@ -29,7 +29,7 @@ SOURCES = {
     'auto_xy/klipper/auto_xy_gate.py':
         ('src/auto_xy_gate_rc16.py', '95bf8077dcf9e05081714fcde85a18d2f383b96d'),
     'auto_xy/klipper/auto_xy_ratos_handoff_rc16.py':
-        ('src/auto_xy_ratos_handoff_rc16.py', '7e750da93ec2c907a6f2c05b9430a28080acdc06'),
+        ('src/auto_xy_ratos_handoff_rc16.py', '7cb03074b349c05a8cf709b4e33947b5c6a0bb8d'),
     'auto_xy/workers/rc16_prepare_worker.py':
         ('src/tools/rc16_prepare_worker.py', '47808233086e234f72e04ffef2b0ab9329238156'),
 }
