@@ -298,6 +298,19 @@ class RC16HandoffTests(unittest.TestCase):
             self.obj.cmd_process(Gcmd())
         self.assertEqual(self.printer.ratos.v_sd.started, [])
 
+    def test_file_change_during_registry_commit_never_starts_print(self):
+        original_wait = self.obj._wait_worker
+        def injected_wait(action, root, filename, mode=None, expected_hash=None, original=None, source_hash=None):
+            result = original_wait(action, root, filename, mode, expected_hash, original, source_hash)
+            if action == 'register':
+                with open(Path(root) / filename, 'ab') as output:
+                    output.write(b'; changed after registry commit\n')
+            return result
+        self.obj._wait_worker = injected_wait
+        with self.assertRaisesRegex(RuntimeError, 'changed after reprint registration'):
+            self.obj.cmd_process(Gcmd())
+        self.assertEqual(self.printer.ratos.v_sd.started, [])
+
     def test_worker_failure_never_starts_print(self):
         self.source.write_bytes(b'START_PRINT\n'+b'X'*80000)
         with self.assertRaises(RuntimeError):
