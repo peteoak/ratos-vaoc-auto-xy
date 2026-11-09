@@ -38,7 +38,7 @@ class StagedUpgradeTests(unittest.TestCase):
 
     def test_offline_stage_then_rollback_exact_restoration(self):
         changes = self.check()
-        self.assertEqual(len(changes), 6)
+        self.assertEqual(len(changes), 7)
         folder = upgrade.stage(self.home, changes)
         self.assertEqual((self.home / 'auto_xy/klipper/auto_xy_gate.py').read_bytes(),
                          (ROOT / 'src/auto_xy_gate_rc16.py').read_bytes())
