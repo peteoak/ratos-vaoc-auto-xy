@@ -76,11 +76,13 @@ class AutoXYRC16Handoff:
         self.ratos, self.gate = ratos, gate
         self.installed = True
 
-    def _wait_worker(self, action, root, filename, mode=None):
+    def _wait_worker(self, action, root, filename, mode=None, expected_hash=None):
         argv = [self.worker_python, str(self.worker), action,
                 '--root', str(root), '--source', filename]
         if mode is not None:
             argv.extend(['--mode', mode])
+        if expected_hash is not None:
+            argv.extend(['--expected-sha256', expected_hash])
         # Never inherit RatOS's resource settings: only the worker lowers its
         # OWN priority, and RatOS is called separately from the coordinator.
         proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -100,7 +102,9 @@ class AutoXYRC16Handoff:
             if len(raw) > WORKER_RESULT_LIMIT:
                 raise CoordinatorError('AutoXY worker returned oversized report')
             result = json.loads(raw)
-            expected = 'STAGED_NOT_AUTHORIZED' if action == 'stage' else 'PREPARED_NOT_AUTHORIZED'
+            expected = {'stage': 'STAGED_NOT_AUTHORIZED',
+                        'prepare': 'PREPARED_NOT_AUTHORIZED',
+                        'verify': 'VERIFIED_NOT_AUTHORIZED'}[action]
             if result.get('status') != expected:
                 raise CoordinatorError('Unrecognised AutoXY worker result')
             return result
@@ -167,19 +171,38 @@ class AutoXYRC16Handoff:
                     raise CoordinatorError('AutoXY cannot authorise independent dual-tool print')
             elif mode == 'independent':
                 gcmd.respond_info('AutoXY RC16: independent single-tool print; native RatOS path')
-            # This prototype's worker result is not yet a complete binding to
-            # the final file and identity. Release coordinator MUST check final
-            # file integrity independently before opening virtual SD.
-            raise CoordinatorError('RC16 coordinator pre-release: final file identity verification not implemented; refusing print')
+            final_hash = prepared.get('output_sha256')
+            if not isinstance(final_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', final_hash):
+                raise CoordinatorError('Missing trusted output checksum')
+            verified = self._wait_worker('verify', root, stage_name, mode,
+                                         expected_hash=final_hash)
+            if (verified.get('stage_name') != stage_name or
+                    verified.get('mode') != mode or
+                    verified.get('protected') is not protected or
+                    verified.get('sha256') != final_hash):
+                raise CoordinatorError('Final prepared file verification mismatch')
+            # Only a short metadata check is done in Klipper itself; hashing
+            # and parsing already happened in the low-priority worker.
+            path = root / stage_name
+            st = path.stat()
+            fingerprint = [st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns]
+            if fingerprint != verified.get('fingerprint') or path.is_symlink():
+                raise CoordinatorError('Prepared file changed before virtual-SD handoff')
+            # Arm the one-use protected controller ONLY for eligible dual-tool
+            # independent prints (the six injected macros enforce the hold).
+            handed_to_sd = True
+            result = self.ratos.v_sd.cmd_SDCARD_PRINT_FILE(
+                FilenameProxy(gcmd, stage_name))
+            return result
         except Exception as exc:
             logging.exception('AutoXY RC16 guarded print preparation refused')
             raise gcmd.error('AutoXY RC16 print not started: ' + str(exc))
         finally:
             self.busy = False
-            # Do not remove a stage that could ever have been opened by the
-            # virtual-SD system. Live cleanup/retention is not yet implemented.
+            # Keep staged files, even on failure: a timed-out worker can still
+            # be exiting, and cleanup/ownership is not yet release-qualified.
             if stage_name and not handed_to_sd:
-                logging.info('AutoXY RC16 staged artifact retained for review; no print started')
+                logging.info('AutoXY RC16 rejected candidate retained; not opened by virtual SD')
 
 
 def load_config(config):
