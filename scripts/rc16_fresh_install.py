@@ -28,6 +28,13 @@ def verify_venv(home, live):
 
 def preflight(home, root, live):
     rc16.verify_sources(root)
+    # An existing camera commission or AutoXY config is machine-specific;
+    # never let an ostensibly "fresh" install overwrite or reuse it.
+    for rel in ('printer_data/config/auto_xy.cfg',
+                'auto_xy/camera_commission.json'):
+        target = home / rel
+        rc16.require(not target.exists() and not target.is_symlink(),
+                     'Fresh install refused: existing machine-specific AutoXY file: ' + rel)
     changes = rc15.plan(home, root, 'fresh')
     verify_venv(home, live)
     offsets = rc15.live_safe(home, 'fresh') if live else None
