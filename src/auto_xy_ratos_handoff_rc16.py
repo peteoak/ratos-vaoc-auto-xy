@@ -271,6 +271,14 @@ class AutoXYRC16Handoff:
                 original=original, source_hash=staged.get('source_sha256'))
             if registered.get('stage_name') != stage_name or registered.get('output_sha256') != final_hash:
                 raise CoordinatorError('Registry entry mismatch; no print')
+            # The registry worker has exited. Recheck the exact inode and
+            # generation immediately before opening virtual SD, not merely
+            # before registry persistence (which can take time on a busy Pi).
+            final_stat = path.stat()
+            if (path.is_symlink() or
+                    [final_stat.st_dev, final_stat.st_ino, final_stat.st_size,
+                     final_stat.st_mtime_ns, final_stat.st_ctime_ns] != verified.get('fingerprint')):
+                raise CoordinatorError('Prepared file changed after reprint registration')
             # Arm the one-use protected controller ONLY for eligible dual-tool
             # independent prints (the six injected macros enforce the hold).
             handed_to_sd = True
