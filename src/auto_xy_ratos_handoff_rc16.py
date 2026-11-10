@@ -60,6 +60,8 @@ class AutoXYRC16Handoff:
         self._retention_timer = None
         self.installed = False
         self.busy = False
+        self._native_sd_open = None
+        self._sd_open_permitted = False
         # Shared nonblocking flock guards the entire prepared-file lifetime,
         # including M25/manual-VAOC pauses. The cleanup worker takes EX lock.
         self._print_lock_fd = None
@@ -72,6 +74,7 @@ class AutoXYRC16Handoff:
         # True only AFTER native processing and bypass handlers are installed.
         return {'enabled': bool(self.enabled),
                 'armed': bool(self.installed),
+                'sd_api_guarded': bool(self.installed and self._native_sd_open),
                 'busy': bool(self.busy),
                 'retention_enabled': bool(self.retention_enabled)}
 
@@ -162,6 +165,24 @@ class AutoXYRC16Handoff:
         self._native_base = old_base
         self._native_processor = old_processor
         self.ratos, self.gate = ratos, gate
+        # Guard direct Python/API virtual-SD file opens as well as G-code
+        # command routes. Only the coordinator can issue a one-use SD open.
+        # Fail startup if the target API cannot be wrapped; never claim armed.
+        self._native_sd_open = ratos.v_sd.cmd_SDCARD_PRINT_FILE
+        try:
+            ratos.v_sd.cmd_SDCARD_PRINT_FILE = self._guard_sd_open
+            if ratos.v_sd.cmd_SDCARD_PRINT_FILE != self._guard_sd_open:
+                raise CoordinatorError('Virtual SD API interception not retained')
+        except Exception as exc:
+            for name, old_handler in reversed(installed):
+                self.gcode.register_command(name, None)
+                self.gcode.register_command(name, old_handler)
+            self.gcode.register_command('PROCESS_GCODE_FILE', None)
+            self.gcode.register_command('PROCESS_GCODE_FILE', old_processor)
+            self.gcode.register_command('SDCARD_PRINT_FILE_BASE', None)
+            self.gcode.register_command('SDCARD_PRINT_FILE_BASE', old_base)
+            raise self.printer.config_error(
+                'RC16 cannot guard direct virtual-SD file starts: ' + str(exc))
         self.installed = True
         if self.retention_enabled:
             reactor = self.printer.get_reactor()
@@ -282,6 +303,22 @@ class AutoXYRC16Handoff:
         else:
             reactor.update_timer(self._print_lock_timer, when)
 
+    def _guard_sd_open(self, gcmd):
+        if not self.installed or not self._sd_open_permitted:
+            raise gcmd.error('RC16: direct virtual-SD start blocked; use RatOS PROCESS_GCODE_FILE')
+        # One-use permission: a second open requires fresh authorisation.
+        self._sd_open_permitted = False
+        return self._native_sd_open(gcmd)
+
+    def _authorised_sd_open(self, callback, gcmd):
+        if self._sd_open_permitted:
+            raise CoordinatorError('Nested virtual-SD file-open authorisation')
+        self._sd_open_permitted = True
+        try:
+            return callback(gcmd)
+        finally:
+            self._sd_open_permitted = False
+
     def cmd_direct_base(self, gcmd):
         # A direct primitive invocation skips RatOS and hides IDEX mode.
         # Reject instead of silently running an independent two-tool job.
@@ -381,7 +418,7 @@ class AutoXYRC16Handoff:
                 if Path(original_name).name.startswith('__AutoXY_RC16_'):
                     raise CoordinatorError(
                         'Generated RC16 file requires independent source verification; choose original G-code')
-                return self._native_processor(gcmd)
+                return self._authorised_sd_open(self._native_processor, gcmd)
             # This shared lock is held for the *entire* generated-file print,
             # not just staging. Retention takes an exclusive lock and cannot
             # delete a selected/paused/printing generated G-code file.
@@ -465,7 +502,8 @@ class AutoXYRC16Handoff:
                 raise CoordinatorError('Prepared file changed after reprint registration')
             # Arm the one-use protected controller ONLY for eligible dual-tool
             # independent prints (the six injected macros enforce the hold).
-            result = self.ratos.v_sd.cmd_SDCARD_PRINT_FILE(
+            result = self._authorised_sd_open(
+                self.ratos.v_sd.cmd_SDCARD_PRINT_FILE,
                 FilenameProxy(gcmd, stage_name))
             handed_to_sd = True
             self._schedule_print_lock_reaper()
