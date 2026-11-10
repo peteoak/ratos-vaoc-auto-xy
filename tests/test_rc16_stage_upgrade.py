@@ -44,6 +44,9 @@ class StagedUpgradeTests(unittest.TestCase):
                          (ROOT / 'src/auto_xy_gate_rc16.py').read_bytes())
         self.assertTrue((self.home / upgrade.LINK).is_symlink())
         self.assertIn('enabled: False', (self.home / upgrade.CONFIG).read_text())
+        self.assertIn('retention_enabled: True', (self.home / upgrade.CONFIG).read_text())
+        self.assertIn('retention_days: 30', (self.home / upgrade.CONFIG).read_text())
+        self.assertIn('retention_interval_hours: 24', (self.home / upgrade.CONFIG).read_text())
         self.assertEqual((self.home / 'printer_data/config/auto_xy.cfg').read_text(),
                          '[include auto_xy_macros.cfg]\n[auto_xy_gate]\nprotected_print_enabled: False\n')
         after = self.printer.read_text()
