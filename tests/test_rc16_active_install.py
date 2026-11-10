@@ -72,11 +72,15 @@ class ActiveInstallerTests(unittest.TestCase):
         self.assert_restored()
 
     def test_snapshot_restored_after_failed_restart(self):
-        def failure():
-            raise OSError('simulated restart failure')
+        attempts = []
+        def restart():
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise OSError('simulated first restart failure')
         with self.assertRaisesRegex(installer.InstallationError, 'prior installation restored'):
             installer.install(self.home, ROOT, live=True,
-                              restart=failure, verify=lambda: None)
+                              restart=restart, verify=lambda: None)
+        self.assertEqual(len(attempts), 2)
         self.assert_restored()
 
     def test_runtime_requires_all_three_active_sections(self):
