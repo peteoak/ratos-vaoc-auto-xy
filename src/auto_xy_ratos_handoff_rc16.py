@@ -141,19 +141,21 @@ class AutoXYRC16Handoff:
             self.gcode.register_command('SDCARD_PRINT_FILE_BASE', None)
             self.gcode.register_command('SDCARD_PRINT_FILE_BASE', old_base)
             raise
-        # M23 directly selects files without passing PROCESS_GCODE_FILE.
-        # M26 can seek past the protected gate in a paused file. Neither is
-        # safe while this opt-in coordinator is armed. Do not intercept M24:
-        # it is required for supervised guarded manual VAOC continuation.
+        # M23/M26 can bypass file preparation. M24 must also be guarded
+        # during a held AutoXY recovery; unrelated native paused prints may
+        # still use it. The gate calls release_protected_m24 only after it
+        # verifies the held-file recovery state.
         installed = []
         try:
-            for name in ('M23', 'M26'):
+            for name in ('M23', 'M26', 'M24'):
                 old_handler = self.gcode.register_command(name, None)
                 if old_handler is None:
                     raise self.printer.config_error(
                         'Required Klipper virtual-SD command missing: ' + name)
                 installed.append((name, old_handler))
-                self.gcode.register_command(name, self.cmd_direct_selection)
+                self.gcode.register_command(
+                    name, self.cmd_m24 if name == 'M24'
+                    else self.cmd_direct_selection)
         except Exception:
             for name, old_handler in reversed(installed):
                 self.gcode.register_command(name, None)
@@ -165,6 +167,7 @@ class AutoXYRC16Handoff:
             raise
         self._native_base = old_base
         self._native_processor = old_processor
+        self._native_m24 = next(handler for name, handler in installed if name == 'M24')
         self.ratos, self.gate = ratos, gate
         # Guard direct Python/API virtual-SD file opens as well as G-code
         # command routes. Only the coordinator can issue a one-use SD open.
@@ -324,6 +327,31 @@ class AutoXYRC16Handoff:
             return callback(gcmd)
         finally:
             self._sd_open_permitted = False
+
+    def _protected_resume_pending(self):
+        session = getattr(self.gate, '_protected_session', None)
+        return (isinstance(session, dict)
+                and not session.get('invalid')
+                and session.get('phase') in (
+                    'PREPARING', 'RETRY_REQUIRED', 'MANUAL_REQUIRED',
+                    'MANUAL_ACTIVE', 'MANUAL_AUTHORIZED', 'AUTO_VERIFIED'))
+
+    def cmd_m24(self, gcmd):
+        if self._protected_resume_pending():
+            raise gcmd.error(
+                'RC16 held print: M24 bypass refused; use guarded '
+                'AUTOXY_PRINT_CONTINUE after recovery')
+        return self._native_m24(gcmd)
+
+    def release_protected_m24(self, gcmd):
+        """Invoke native M24 only for the exact gate-approved held session."""
+        session = getattr(self.gate, '_protected_session', None)
+        if (not self.installed or not isinstance(session, dict)
+                or session.get('invalid')
+                or session.get('phase') not in ('MANUAL_AUTHORIZED',
+                                                'AUTO_VERIFIED')):
+            raise gcmd.error('RC16: no authorised held-print continuation')
+        return self._native_m24(gcmd)
 
     def cmd_direct_base(self, gcmd):
         # A direct primitive invocation skips RatOS and hides IDEX mode.
