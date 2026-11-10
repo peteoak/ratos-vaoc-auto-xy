@@ -50,7 +50,7 @@ class GeneratedRetentionTests(unittest.TestCase):
         result = ret.clean(
             self.root, self.registry, execute=True, confirm='DELETE_RC16_EXPIRED',
             now=self.now, idle_probe=lambda: calls.append(True))
-        self.assertEqual(calls, [True])
+        self.assertGreaterEqual(len(calls), 3)
         self.assertEqual(result['deleted_count'], 1)
         self.assertFalse(self.file.exists())
         self.assertFalse(self.record.exists())
