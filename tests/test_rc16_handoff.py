@@ -211,6 +211,16 @@ class RC16HandoffTests(unittest.TestCase):
             self.assertIn(b'\nSTART_PRINT ', payload)
             self.assertNotIn(b'AUTOXY_PRINT_CALIBRATE', payload)
 
+    def test_copy_mirror_cannot_reprint_generated_protected_file(self):
+        self.obj.cmd_process(Gcmd())
+        generated = self.printer.ratos.v_sd.started[-1]
+        self.printer.ratos.v_sd.finish()
+        for mode in ('copy', 'mirror'):
+            self.printer.ratos.dual_carriage.mode = mode
+            with self.assertRaisesRegex(RuntimeError, 'Generated RC16 file'):
+                self.obj.cmd_process(Gcmd(generated))
+        self.assertEqual(len(self.printer.ratos.v_sd.started), 1)
+
     def test_copy_with_toolshift_refuses_in_native_ratos(self):
         self.printer.ratos.dual_carriage.mode = 'copy'
         # RatOS returns False and does not open virtual SD; no need for
