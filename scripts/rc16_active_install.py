@@ -18,7 +18,7 @@ import rc16_stage_upgrade as upgrade
 HOME = Path('/home/pi')
 INFO_URL = 'http://127.0.0.1:7125/printer/info'
 CONFIG_URL = ('http://127.0.0.1:7125/printer/objects/query?'
-              'configfile&auto_xy_ratos_handoff_rc16')
+              'configfile&auto_xy_ratos_handoff_rc16&save_variables')
 RESTART_COMMAND = ('sudo', '-n', 'systemctl', 'restart', 'klipper')
 
 
@@ -57,6 +57,15 @@ def check_active_runtime(timeout=90, sleep=time.sleep):
                 coordinator = status.get('auto_xy_ratos_handoff_rc16', {})
                 if coordinator.get('armed') is not True:
                     raise InstallationError('RC16 print-file processor is not armed')
+                # The config flags alone do not enable AutoXY. The controller
+                # also reads its persistent SAVE_VARIABLE state on each run.
+                saved = status.get('save_variables', {}).get('variables', {})
+                enabled = saved.get('auto_xy_v2_enabled')
+                if str(enabled).strip().lower() not in ('1', '1.0', 'true'):
+                    raise InstallationError('Persistent AutoXY calibration enable is OFF')
+                for key in ('auto_xy_v2_fault', 'auto_xy_v2_in_progress'):
+                    if str(saved.get(key, 0)).strip().lower() not in ('0', '0.0', 'false'):
+                        raise InstallationError('AutoXY has an unresolved safety fault: ' + key)
                 return
             last = 'Klipper state: ' + str(info.get('state'))
         except InstallationError:
