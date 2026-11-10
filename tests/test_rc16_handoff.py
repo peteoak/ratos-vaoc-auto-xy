@@ -243,6 +243,7 @@ class RC16HandoffTests(unittest.TestCase):
         before = self.source.read_bytes()
         self.obj.cmd_process(Gcmd())
         previous = self.printer.ratos.v_sd.started[-1]
+        self.printer.ratos.v_sd.finish()
         self.obj.cmd_process(Gcmd(previous))
         current = self.printer.ratos.v_sd.started[-1]
         self.assertNotEqual(previous, current)
@@ -264,6 +265,7 @@ class RC16HandoffTests(unittest.TestCase):
         self.obj.cmd_process(Gcmd())
         name = self.printer.ratos.v_sd.started[-1]
         self.source.write_bytes(START.replace(b'BED_TEMP=60', b'BED_TEMP=65') + b'G1 X77\n')
+        self.printer.ratos.v_sd.finish()
         self.obj.cmd_process(Gcmd(name))
         new = self.printer.ratos.v_sd.started[-1]
         self.assertIn(b'BED_TEMP=65', (self.root / new).read_bytes())
@@ -316,7 +318,7 @@ class RC16HandoffTests(unittest.TestCase):
         retain.write_text('pass\n')
         controller.retention_worker = retain
         controller.registry = self.root / 'registry'
-        controller.registry.mkdir()
+        controller.registry.mkdir(exist_ok=True)
         scheduled = []
         printer.reactor.register_timer = lambda cb, event: scheduled.append((cb, event))
         class Stats:
@@ -344,7 +346,7 @@ class RC16HandoffTests(unittest.TestCase):
         printer = Printer(self.root)
         controller = mod.AutoXYRC16Handoff(Config(printer))
         controller.registry = self.root / 'registry'
-        controller.registry.mkdir()
+        controller.registry.mkdir(exist_ok=True)
         class Stats:
             def get_status(self, now):
                 return {'state': 'printing'}
@@ -373,6 +375,7 @@ class RC16HandoffTests(unittest.TestCase):
         del printer.gcode.handlers['M26']
         controller = mod.AutoXYRC16Handoff(Config(printer))
         controller.worker = WORKER
+        controller.registry = self.root / 'registry_m26_missing'
         with self.assertRaisesRegex(RuntimeError, 'Required Klipper virtual-SD command missing'):
             printer.handlers['klippy:ready']()
         self.assertFalse(controller.installed)
