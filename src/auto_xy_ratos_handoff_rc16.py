@@ -8,6 +8,7 @@ UNQUALIFIED: no installer/preflight or full printer-start bypass verification.
 DO NOT ENABLE on a real printer until the release safety matrix is completed.
 """
 import json
+import time
 import logging
 import os
 import re
@@ -44,6 +45,16 @@ class AutoXYRC16Handoff:
         self.worker = Path(config.get('worker', '/home/pi/auto_xy/workers/rc16_prepare_worker.py'))
         self.worker_python = config.get('worker_python', sys.executable)
         self.registry = Path(config.get('registry_directory', '/home/pi/auto_xy/rc16_registry'))
+        # This is an opt-in RC16 development extension. When the handoff is
+        # eventually enabled, retention is enabled by default as well.
+        self.retention_enabled = config.getboolean('retention_enabled', True)
+        self.retention_days = config.getint('retention_days', 30, minval=7)
+        self.retention_interval = config.getint('retention_interval_hours', 24, minval=1)
+        self.retention_worker = Path(config.get(
+            'retention_worker', '/home/pi/auto_xy/workers/rc16_generated_retention.py'))
+        self._retention_proc = None
+        self._retention_next = 0.0
+        self._retention_timer = None
         self.installed = False
         self.busy = False
         self.gcode.register_command('AUTOXY_RC16_HANDOFF_STATUS', self.cmd_status)
@@ -114,6 +125,61 @@ class AutoXYRC16Handoff:
         self._native_processor = old_processor
         self.ratos, self.gate = ratos, gate
         self.installed = True
+        if self.retention_enabled:
+            if not self.retention_worker.is_file() or self.retention_worker.is_symlink():
+                raise self.printer.config_error(
+                    'RC16 automatic retention worker missing or unsafe')
+            reactor = self.printer.get_reactor()
+            self._retention_next = reactor.monotonic() + 120.
+            self._retention_timer = reactor.register_timer(
+                self._retention_tick, self._retention_next)
+
+    def _retention_safe_to_start(self):
+        # A short in-memory status check ONLY; the cleanup worker makes its
+        # own independent Moonraker checks immediately before every unlink.
+        if self.busy or self._retention_proc is not None:
+            return False
+        if not self.registry.is_dir() or self.registry.is_symlink():
+            return False
+        ps = self.printer.lookup_object('print_stats', None)
+        vsd = self.printer.lookup_object('virtual_sdcard', None)
+        if ps is None or vsd is None:
+            return False
+        now = self.printer.get_reactor().monotonic()
+        try:
+            stats = ps.get_status(now)
+            current = vsd.get_status(now)
+            return (stats.get('state') in ('standby', 'complete', 'cancelled', 'error')
+                    and current.get('is_active') is False
+                    and current.get('file_path') in (None, ''))
+        except Exception:
+            logging.exception('RC16 retention idle check failed; deferring')
+            return False
+
+    def _retention_tick(self, eventtime):
+        # Never wait, scan, hash or delete in the reactor timer. At most a
+        # process poll and a low-priority spawn. No RatOS process is changed.
+        if self._retention_proc is not None:
+            if self._retention_proc.poll() is None:
+                return eventtime + 30.
+            result = self._retention_proc.returncode
+            self._retention_proc = None
+            if result != 0:
+                logging.warning('RC16 automatic retention worker declined cleanup')
+            self._retention_next = eventtime + self.retention_interval * 3600.
+        if eventtime >= self._retention_next and self._retention_safe_to_start():
+            try:
+                self._retention_proc = subprocess.Popen([
+                    self.worker_python, str(self.retention_worker),
+                    '--auto', '--root', str(self.ratos.sdcard_dirname),
+                    '--registry', str(self.registry), '--days',
+                    str(self.retention_days)
+                ], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL, close_fds=True)
+            except OSError:
+                logging.exception('RC16 automatic retention spawn failed')
+                self._retention_next = eventtime + 3600.
+        return eventtime + 30.
 
     def cmd_direct_base(self, gcmd):
         # A direct primitive invocation skips RatOS and hides IDEX mode.
@@ -192,6 +258,10 @@ class AutoXYRC16Handoff:
     def cmd_process(self, gcmd):
         if not self.installed or self.busy:
             raise gcmd.error('RC16 handoff not armed or another request is running')
+        # A cleanup worker may be deleting an expired generated file. Refuse
+        # the new start rather than racing its file lifecycle. Retry normally.
+        if self._retention_proc is not None and self._retention_proc.poll() is None:
+            raise gcmd.error('RC16 automatic retention in progress; retry print start')
         self.busy = True
         stage_name = None
         handed_to_sd = False
