@@ -57,6 +57,9 @@ class VSD:
         self.started = []
         self.file_path = None
         self.is_active = False
+        self.resume_calls = 0
+    def do_resume(self):
+        self.resume_calls += 1
     def get_status(self, now):
         return {'is_active': self.is_active, 'file_path': self.file_path}
     def cmd_SDCARD_PRINT_FILE(self, gcmd):
@@ -393,6 +396,27 @@ class RC16HandoffTests(unittest.TestCase):
             self.printer.ratos.v_sd.cmd_SDCARD_PRINT_FILE(Gcmd('second.gcode'))
         self.assertEqual(self.printer.ratos.v_sd.started, ['first.gcode'])
 
+    def test_direct_python_resume_requires_guarded_release(self):
+        sd = self.printer.ratos.v_sd
+        self.printer.gate._protected_session = {
+            'filename': 'part.gcode', 'phase': 'MANUAL_REQUIRED', 'invalid': False}
+        with self.assertRaisesRegex(mod.CoordinatorError, 'direct do_resume bypass refused'):
+            sd.do_resume()
+        self.assertEqual(sd.resume_calls, 0)
+        self.assertTrue(self.obj.get_status(time.monotonic())['resume_api_guarded'])
+        self.printer.gate._protected_session['phase'] = 'MANUAL_AUTHORIZED'
+        self.obj._native_m24 = lambda gcmd: sd.do_resume()
+        self.obj.release_protected_m24(Gcmd())
+        self.assertEqual(sd.resume_calls, 1)
+        with self.assertRaisesRegex(mod.CoordinatorError, 'direct do_resume bypass refused'):
+            sd.do_resume()
+        self.assertEqual(sd.resume_calls, 1)
+
+    def test_unprotected_native_resume_still_works(self):
+        sd = self.printer.ratos.v_sd
+        sd.do_resume()
+        self.assertEqual(sd.resume_calls, 1)
+
     def test_held_print_blocks_direct_m24_but_permits_guarded_release(self):
         native_calls = []
         self.obj._native_m24 = lambda gcmd: native_calls.append('native M24')
@@ -435,6 +459,7 @@ class RC16HandoffTests(unittest.TestCase):
         coordinator.retention_enabled = True
         coordinator.retention_worker = ROOT / 'src/tools/rc16_generated_retention.py'
         native = printer.ratos.v_sd.cmd_SDCARD_PRINT_FILE
+        original_resume = printer.ratos.v_sd.do_resume
         original_handlers = dict(printer.gcode.handlers)
         with unittest.mock.patch.object(printer.reactor, 'register_timer',
                                         side_effect=OSError('simulated timer failure')):
@@ -443,6 +468,7 @@ class RC16HandoffTests(unittest.TestCase):
         self.assertFalse(coordinator.installed)
         self.assertEqual(printer.gcode.handlers, original_handlers)
         self.assertEqual(printer.ratos.v_sd.cmd_SDCARD_PRINT_FILE, native)
+        self.assertEqual(printer.ratos.v_sd.do_resume, original_resume)
 
     def test_missing_sd_selection_guard_refuses_arming_and_restores_handlers(self):
         printer = Printer(self.root)
