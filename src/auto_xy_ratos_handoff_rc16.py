@@ -366,6 +366,13 @@ class AutoXYRC16Handoff:
             # temporarily resets the carriage to single mode.
             initial_mode = self._mode()
             if initial_mode in ('copy', 'mirror'):
+                # Previously generated RC16 files may carry independent
+                # two-tool calibration macros. Never allow a mode change to
+                # bypass their original-source verification.
+                original_name = gcmd.get('FILENAME', '')
+                if Path(original_name).name.startswith('__AutoXY_RC16_'):
+                    raise CoordinatorError(
+                        'Generated RC16 file requires independent source verification; choose original G-code')
                 return self._native_processor(gcmd)
             # This shared lock is held for the *entire* generated-file print,
             # not just staging. Retention takes an exclusive lock and cannot
