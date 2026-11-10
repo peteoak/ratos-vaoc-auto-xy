@@ -371,6 +371,21 @@ class RC16HandoffTests(unittest.TestCase):
         controller.busy = True
         self.assertFalse(controller._retention_safe_to_start())
 
+    def test_direct_python_virtual_sd_open_cannot_bypass_coordinator(self):
+        with self.assertRaisesRegex(RuntimeError, 'direct virtual-SD start blocked'):
+            self.printer.ratos.v_sd.cmd_SDCARD_PRINT_FILE(Gcmd())
+        self.assertEqual(self.printer.ratos.v_sd.started, [])
+        self.assertTrue(self.obj.get_status(time.monotonic())['sd_api_guarded'])
+
+    def test_single_use_sd_open_authorisation_cannot_be_replayed(self):
+        self.obj._authorised_sd_open(self.printer.ratos.v_sd.cmd_SDCARD_PRINT_FILE,
+                                     Gcmd('first.gcode'))
+        self.assertEqual(self.printer.ratos.v_sd.started, ['first.gcode'])
+        self.printer.ratos.v_sd.finish()
+        with self.assertRaisesRegex(RuntimeError, 'direct virtual-SD start blocked'):
+            self.printer.ratos.v_sd.cmd_SDCARD_PRINT_FILE(Gcmd('second.gcode'))
+        self.assertEqual(self.printer.ratos.v_sd.started, ['first.gcode'])
+
     def test_direct_m23_m26_cannot_select_or_seek_past_protection(self):
         for name in ('M23', 'M26'):
             with self.assertRaisesRegex(RuntimeError, 'direct SD selection/seeking blocked'):
