@@ -61,6 +61,42 @@ class ReadOnlyPreflightTests(unittest.TestCase):
         self.user.symlink_to(outside)
         self.assertEqual(module.file_summary(self.home)['rc15_files'], 'MISSING_OR_UNSAFE')
 
+    def test_idle_and_cool_requires_positive_idle_timeout_state(self):
+        import json
+        from unittest.mock import MagicMock
+        sample = {
+            'print_stats': {'state': 'complete'},
+            'virtual_sdcard': {'is_active': False, 'file_path': ''},
+            'idle_timeout': {'state': 'Idle'},
+            'gcode_macro _VAOC': {'is_started': False},
+            'save_variables': {'variables': {
+                'idex_xoffset': 0, 'idex_yoffset': 0, 'idex_zoffset': 0}},
+            'heater_bed': {'target': 0, 'temperature': 22},
+            'extruder': {'target': 0, 'temperature': 22},
+            'extruder1': {'target': 0, 'temperature': 22},
+        }
+        for idle_state, expected in [('Idle', 'YES'), ('Ready', 'NO'),
+                                     ('Printing', 'NO'), (None, 'NO')]:
+            with self.subTest(idle_state=idle_state):
+                sample['idle_timeout']['state'] = idle_state
+                response = MagicMock()
+                response.__enter__.return_value = io.BytesIO(
+                    json.dumps({'result': {'status': sample}}).encode())
+                with patch.object(module, 'urlopen', return_value=response):
+                    result = module.runtime_summary()
+                self.assertEqual(result['idle_and_cool'], expected)
+
+    def test_vision_accepts_normal_virtualenv_python_symlink(self):
+        import sys
+        env = self.home / 'auto-xy-venv/bin'
+        env.mkdir(parents=True)
+        (env / 'python').symlink_to(Path(sys.executable).resolve())
+        fake = type('Completed', (), {'returncode': 0,
+                 'stdout': '1.26.4/4.8.0\\n'})()
+        with patch.object(module.subprocess, 'run', return_value=fake) as run:
+            self.assertEqual(module.vision_summary(self.home), '1.26.4/4.8.0')
+            self.assertEqual(run.call_args.args[0][0], str(env / 'python'))
+
     def test_vision_environment_missing_is_a_status_not_a_crash(self):
         self.assertEqual(module.vision_summary(self.home), 'NOT_FOUND')
 
