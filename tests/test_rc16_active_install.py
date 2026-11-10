@@ -36,6 +36,12 @@ class ActiveInstallerTests(unittest.TestCase):
         self.printer.write_text(
             '[include auto_xy.cfg]\n#*# SAVE_CONFIG\n#*# do not touch\n')
         self.before = (self.settings.read_bytes(), self.printer.read_bytes())
+        original_check = upgrade.check_active_installation
+        guard = patch.object(upgrade, 'check_active_installation',
+                             side_effect=lambda home, root, live:
+                             original_check(home, root, live=False))
+        guard.start()
+        self.addCleanup(guard.stop)
 
     def assert_restored(self):
         self.assertEqual(self.gate.read_bytes(), self.previous_gate)
