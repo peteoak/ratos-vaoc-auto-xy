@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 import rc16_stage_upgrade as upgrade
 
@@ -20,6 +20,7 @@ INFO_URL = 'http://127.0.0.1:7125/printer/info'
 CONFIG_URL = ('http://127.0.0.1:7125/printer/objects/query?'
               'configfile&auto_xy_ratos_handoff_rc16&save_variables')
 RESTART_COMMAND = ('sudo', '-n', 'systemctl', 'restart', 'klipper')
+GCODE_URL = 'http://127.0.0.1:7125/printer/gcode/script'
 
 
 class InstallationError(RuntimeError):
@@ -34,6 +35,75 @@ def restart_klipper():
 def query_json(url):
     with urlopen(url, timeout=5) as response:
         return json.load(response)
+
+
+def post_gcode(script):
+    """Post only fixed, reviewed housekeeping macros to Moonraker."""
+    allowed = ('AUTO_XY_ON',
+               'SAVE_VARIABLE VARIABLE=auto_xy_v2_enabled VALUE=0',
+               'SAVE_VARIABLE VARIABLE=auto_xy_v2_measure_only VALUE=0',
+               'SAVE_VARIABLE VARIABLE=auto_xy_v2_measure_only VALUE=1')
+    if script not in allowed:
+        raise InstallationError('Disallowed installer G-code')
+    data = json.dumps({'script': script}).encode('utf-8')
+    request = Request(GCODE_URL, data=data,
+                      headers={'Content-Type': 'application/json'},
+                      method='POST')
+    with urlopen(request, timeout=10) as response:
+        result = json.load(response)
+    if 'error' in result:
+        raise InstallationError('Klipper rejected AutoXY installation command')
+
+
+def saved_state():
+    status = query_json(CONFIG_URL)['result']['status']
+    variables = status.get('save_variables', {}).get('variables', {})
+    if 'auto_xy_v2_enabled' not in variables:
+        raise InstallationError('AutoXY saved enabled state missing')
+    for key in ('auto_xy_v2_fault', 'auto_xy_v2_in_progress',
+                'auto_xy_v2_retry_available'):
+        if str(variables.get(key, 0)).strip().lower() not in ('0', '0.0', 'false'):
+            raise InstallationError('AutoXY unresolved state: ' + key)
+    enabled = str(variables['auto_xy_v2_enabled']).strip().lower()
+    measure = str(variables.get('auto_xy_v2_measure_only', 0)).strip().lower()
+    if enabled not in ('0', '0.0', 'false', '1', '1.0', 'true'):
+        raise InstallationError('Unexpected AutoXY enable value')
+    if measure not in ('0', '0.0', 'false', '1', '1.0', 'true'):
+        raise InstallationError('Unexpected AutoXY measure-only value')
+    return (enabled in ('1', '1.0', 'true'),
+            measure in ('1', '1.0', 'true'))
+
+
+def activate_persistent_gate():
+    """Enable AutoXY only after the RC16 processor is loaded and armed."""
+    info = query_json(INFO_URL)['result']
+    status = query_json(CONFIG_URL)['result']['status']
+    if info.get('state') != 'ready':
+        raise InstallationError('Cannot activate while Klipper is not ready')
+    settings = status.get('configfile', {}).get('settings', {})
+    if (settings.get('auto_xy_gate', {}).get('protected_print_enabled') is not True
+            or settings.get('auto_xy_ratos_handoff_rc16', {}).get('enabled') is not True
+            or status.get('auto_xy_ratos_handoff_rc16', {}).get('armed') is not True):
+        raise InstallationError('Cannot enable before native print protection is armed')
+    enabled, _ = saved_state()
+    if not enabled:
+        post_gcode('AUTO_XY_ON')
+
+
+def restore_saved_state(original):
+    """Restore only the saved flags the installer may have changed."""
+    if original is None:
+        return
+    desired_enabled, desired_measure = original
+    current_enabled, current_measure = saved_state()
+    if desired_enabled != current_enabled:
+        if desired_enabled:
+            post_gcode('AUTO_XY_ON')
+        else:
+            post_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_enabled VALUE=0')
+    if desired_measure != current_measure:
+        post_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_measure_only VALUE=%d'
+                   % int(desired_measure))
 
 
 def check_active_runtime(timeout=90, sleep=time.sleep):
@@ -80,10 +150,12 @@ def install(home, root, *, live, restart=restart_klipper,
             verify=check_active_runtime):
     """Transactional filesystem migration; automatic service rollback if needed."""
     variant, changes = upgrade.check_active_installation(home, root, live=live)
+    original_flags = saved_state() if live else None
     receipt = upgrade.stage(home, changes)
     try:
         if live:
             restart()
+            activate_persistent_gate()
             verify()
     except BaseException as error:
         # This restores the previous gate, config, printer include and RC16
@@ -92,6 +164,7 @@ def install(home, root, *, live, restart=restart_klipper,
             upgrade.rollback(home, receipt, live=False)
             if live:
                 restart()
+                restore_saved_state(original_flags)
         except BaseException as rollback_error:
             raise InstallationError(
                 'RC16 failed and rollback/restart also failed. '
