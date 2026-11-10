@@ -2613,7 +2613,10 @@ class AutoXYGate:
             raise gcmd.error('AutoXY refuses continuation while AutoXY fault/in-progress is latched')
         if self.sts('gcode_macro _VAOC').get('is_started'):
             raise gcmd.error('AutoXY refuses continuation with active VAOC')
-        self.gcode.run_script_from_command('M24')
+        handoff=self.printer.lookup_object('auto_xy_ratos_handoff_rc16',None)
+        if handoff is None or not getattr(handoff,'installed',False):
+            raise gcmd.error('AutoXY recovery cannot release: RC16 print handoff missing')
+        handoff.release_protected_m24(gcmd)
         gcmd.respond_info('AutoXY | releasing guarded original file')
 
     def cmd_AUTOXY_PRINT_CHECK(self,gcmd):
