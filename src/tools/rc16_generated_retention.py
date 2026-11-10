@@ -150,6 +150,59 @@ def candidates(root, registry, now=None, age_days=DEFAULT_DAYS,
     return result
 
 
+
+def pending_candidates(root, registry, now=None, age_days=DEFAULT_DAYS,
+                       max_candidates=MAX_DELETE):
+    """Expire ONLY authenticated AutoXY pending stages, not unknown files.
+
+    A stale incomplete stage may have no final reprint registry. A pending
+    marker records its ownership and checksum from the AutoXY worker.
+    A file altered after that marker was written is never silently removed.
+    """
+    root, registry = safe_dirs(root, registry)
+    now = time.time() if now is None else now
+    results = []
+    for marker in sorted(registry.glob('*.pending.json')):
+        if len(results) >= max_candidates:
+            break
+        try:
+            match = re.fullmatch(r'([0-9a-f]{24})\.pending\.json', marker.name)
+            if not match or marker.is_symlink() or not marker.is_file():
+                continue
+            st = marker.stat()
+            if st.st_size > 4096 or now - st.st_mtime < age_days * 86400:
+                continue
+            final_record = registry / (match.group(1) + '.json')
+            if final_record.exists() or final_record.is_symlink():
+                continue
+            info = json.loads(marker.read_text(encoding='utf-8'))
+            name = '__AutoXY_RC16_' + match.group(1) + '.gcode'
+            if (info.get('kind') != 'autoxy_pending_stage' or
+                    info.get('schema') != 1 or info.get('stage_name') != name or
+                    not SHA.fullmatch(str(info.get('sha256', ''))) or
+                    type(info.get('bytes')) is not int or info['bytes'] < 0):
+                continue
+            file = root / name
+            if file.is_symlink():
+                continue
+            if file.exists():
+                if not file.is_file():
+                    continue
+                fst = file.stat()
+                if fst.st_size != info['bytes'] or now - fst.st_mtime < age_days * 86400:
+                    continue
+                if sha_file(file) != info['sha256']:
+                    continue
+                snapshot = fingerprint(fst)
+            else:
+                snapshot = None  # leftover marker before generated publication
+            results.append((file, marker, info['sha256'],
+                            snapshot, fingerprint(st)))
+        except (OSError, ValueError, KeyError, Refuse):
+            continue
+    return results
+
+
 def clean(root, registry, execute=False, confirm='', age_days=DEFAULT_DAYS,
           idle_probe=moonraker_idle, now=None, auto=False,
           max_delete=MAX_DELETE):
@@ -169,6 +222,12 @@ def clean(root, registry, execute=False, confirm='', age_days=DEFAULT_DAYS,
         found = candidates(root, registry, now=now, age_days=age_days,
                            max_candidates=max_delete)
         deleted = 0
+        # Authenticate and remove registered files first; allow pending
+        # artifacts to use the remaining bounded deletion slots.
+        pending = pending_candidates(root, registry, now=now, age_days=age_days,
+                                     max_candidates=max(1, max_delete - len(found)))
+        if len(found) >= max_delete:
+            pending = []
         for generated, record, expected, initial_file, initial_record in found:
             try:
                 idle_probe()
@@ -197,8 +256,44 @@ def clean(root, registry, execute=False, confirm='', age_days=DEFAULT_DAYS,
                 break
             except (OSError, ValueError):
                 continue
-    return {'dry_run': False, 'eligible_count': len(found),
-            'deleted_count': deleted}
+        pending_deleted = 0
+        for generated, marker, expected, initial_file, initial_marker in pending:
+            try:
+                idle_probe()
+                if marker.is_symlink() or fingerprint(marker.stat()) != initial_marker:
+                    continue
+                # Never remove an owned file that later received a successful
+                # final registry entry.
+                final = registry / (marker.name[:24] + '.json')
+                if final.exists() or final.is_symlink() or generated.is_symlink():
+                    continue
+                cutoff = (time.time() if now is None else now) - age_days * 86400
+                if marker.stat().st_mtime >= cutoff:
+                    continue
+                if initial_file is not None:
+                    if (not generated.is_file() or
+                            fingerprint(generated.stat()) != initial_file or
+                            generated.stat().st_mtime >= cutoff or
+                            sha_file(generated) != expected):
+                        continue
+                elif generated.exists():
+                    continue
+                idle_probe()
+                if fingerprint(marker.stat()) != initial_marker:
+                    continue
+                if initial_file is not None:
+                    if fingerprint(generated.stat()) != initial_file:
+                        continue
+                    generated.unlink()
+                marker.unlink()
+                pending_deleted += 1
+            except Refuse:
+                break
+            except (OSError, ValueError):
+                continue
+        deleted += pending_deleted
+    return {'dry_run': False, 'eligible_count': len(found) + len(pending),
+            'deleted_count': deleted, 'pending_deleted_count': pending_deleted}
 
 
 def write_report(registry, result):
