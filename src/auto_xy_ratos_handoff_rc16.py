@@ -75,6 +75,13 @@ class AutoXYRC16Handoff:
             raise self.printer.config_error('RatOS process API does not match audited version')
         if not self.worker.is_file() or self.worker.is_symlink():
             raise self.printer.config_error('RC16 worker not installed at a trusted regular path')
+        # Check all activation prerequisites before changing ANY Klipper
+        # command ownership; a missing retention executable must fail closed.
+        if (self.retention_enabled and
+                (not self.retention_worker.is_file() or
+                 self.retention_worker.is_symlink())):
+            raise self.printer.config_error(
+                'RC16 automatic retention worker missing or unsafe')
         # RatOS 2.1 macro: SDCARD_PRINT_FILE -> PROCESS_GCODE_FILE,
         # while SDCARD_PRINT_FILE_BASE is the lower-level renamed primitive.
         # Direct use of that primitive must not bypass protected printing.
@@ -126,9 +133,6 @@ class AutoXYRC16Handoff:
         self.ratos, self.gate = ratos, gate
         self.installed = True
         if self.retention_enabled:
-            if not self.retention_worker.is_file() or self.retention_worker.is_symlink():
-                raise self.printer.config_error(
-                    'RC16 automatic retention worker missing or unsafe')
             reactor = self.printer.get_reactor()
             self._retention_next = reactor.monotonic() + 120.
             self._retention_timer = reactor.register_timer(
