@@ -74,7 +74,8 @@ class AutoXYRC16Handoff:
         # True only AFTER native processing and bypass handlers are installed.
         return {'enabled': bool(self.enabled),
                 'armed': bool(self.installed),
-                'sd_api_guarded': bool(self.installed and self._native_sd_open),
+                'sd_api_guarded': bool(self.installed and self._native_sd_open and
+                                       self.ratos.v_sd.cmd_SDCARD_PRINT_FILE == self._guard_sd_open),
                 'busy': bool(self.busy),
                 'retention_enabled': bool(self.retention_enabled)}
 
@@ -396,6 +397,8 @@ class AutoXYRC16Handoff:
     def cmd_process(self, gcmd):
         if not self.installed or self.busy:
             raise gcmd.error('RC16 handoff not armed or another request is running')
+        if self.ratos.v_sd.cmd_SDCARD_PRINT_FILE != self._guard_sd_open:
+            raise gcmd.error('RC16 direct virtual-SD guard was replaced; print refused')
         # A cleanup worker may be deleting an expired generated file. Refuse
         # the new start rather than racing its file lifecycle. Retry normally.
         if self._retention_proc is not None and self._retention_proc.poll() is None:
