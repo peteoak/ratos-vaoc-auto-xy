@@ -213,7 +213,7 @@ def check_active_installation(home, repo, live):
     changes = dict(files)
     changes[GATE_CONFIG] = plan['gate_config_bytes']
     changes[CONFIG] = plan['handoff_config_bytes']
-    changes[PRINTER] = add_include(text)
+    changes[PRINTER] = add_include(text).encode('utf-8')
     changes[LINK] = ('SYMLINK:' +
                      str(home / 'auto_xy/klipper/auto_xy_ratos_handoff_rc16.py')).encode('ascii')
     return plan['variant'], changes
