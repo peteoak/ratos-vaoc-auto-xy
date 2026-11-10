@@ -393,6 +393,29 @@ class RC16HandoffTests(unittest.TestCase):
             self.printer.ratos.v_sd.cmd_SDCARD_PRINT_FILE(Gcmd('second.gcode'))
         self.assertEqual(self.printer.ratos.v_sd.started, ['first.gcode'])
 
+    def test_held_print_blocks_direct_m24_but_permits_guarded_release(self):
+        native_calls = []
+        self.obj._native_m24 = lambda gcmd: native_calls.append('native M24')
+        self.printer.gcode.handlers['M24'](Gcmd())
+        self.assertEqual(native_calls, ['native M24'])
+        self.printer.gate._protected_session = {
+            'filename': 'part.gcode', 'phase': 'MANUAL_REQUIRED', 'invalid': False}
+        with self.assertRaisesRegex(RuntimeError, 'M24 bypass refused'):
+            self.printer.gcode.handlers['M24'](Gcmd())
+        with self.assertRaisesRegex(RuntimeError, 'no authorised'):
+            self.obj.release_protected_m24(Gcmd())
+        self.printer.gate._protected_session['phase'] = 'MANUAL_AUTHORIZED'
+        self.obj.release_protected_m24(Gcmd())
+        self.assertEqual(native_calls, ['native M24', 'native M24'])
+        with self.assertRaisesRegex(RuntimeError, 'M24 bypass refused'):
+            self.printer.gcode.handlers['M24'](Gcmd())
+
+    def test_failed_held_session_cannot_be_resumed_directly(self):
+        self.printer.gate._protected_session = {
+            'filename': 'part.gcode', 'phase': 'MANUAL_REQUIRED', 'invalid': True}
+        with self.assertRaisesRegex(RuntimeError, 'M24 bypass refused'):
+            self.printer.gcode.handlers['M24'](Gcmd())
+
     def test_direct_m23_m26_cannot_select_or_seek_past_protection(self):
         for name in ('M23', 'M26'):
             with self.assertRaisesRegex(RuntimeError, 'direct SD selection/seeking blocked'):
