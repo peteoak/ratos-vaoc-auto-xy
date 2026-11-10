@@ -8,6 +8,8 @@ UNQUALIFIED: no installer/preflight or full printer-start bypass verification.
 DO NOT ENABLE on a real printer until the release safety matrix is completed.
 """
 import json
+import fcntl
+import stat
 import time
 import logging
 import os
@@ -18,6 +20,7 @@ from pathlib import Path
 
 STAGED = re.compile(r'^__AutoXY_RC16_[0-9a-f]{24}\.gcode$')
 WORKER_RESULT_LIMIT = 4096
+RETENTION_LOCK_NAME = '.rc16_retention.lock'
 
 
 class CoordinatorError(ValueError):
@@ -57,6 +60,10 @@ class AutoXYRC16Handoff:
         self._retention_timer = None
         self.installed = False
         self.busy = False
+        # Shared nonblocking flock guards the entire prepared-file lifetime,
+        # including M25/manual-VAOC pauses. The cleanup worker takes EX lock.
+        self._print_lock_fd = None
+        self._print_lock_timer = None
         self.gcode.register_command('AUTOXY_RC16_HANDOFF_STATUS', self.cmd_status)
         self.printer.register_event_handler('klippy:ready', self.on_ready)
 
@@ -82,6 +89,22 @@ class AutoXYRC16Handoff:
                  self.retention_worker.is_symlink())):
             raise self.printer.config_error(
                 'RC16 automatic retention worker missing or unsafe')
+        # Prepare the lock before intercepting print commands. A symlinked
+        # registry or non-regular lock is never trusted.
+        try:
+            self.registry.mkdir(parents=True, exist_ok=True, mode=0o700)
+            if not self.registry.is_dir() or self.registry.is_symlink():
+                raise ValueError('Untrusted RC16 registry directory')
+            lock_path = self.registry / RETENTION_LOCK_NAME
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR |
+                         getattr(os, 'O_NOFOLLOW', 0), 0o600)
+            try:
+                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                    raise ValueError('Untrusted RC16 retention lock')
+            finally:
+                os.close(fd)
+        except (OSError, ValueError) as exc:
+            raise self.printer.config_error('RC16 retention lock preflight refused: ' + str(exc))
         # RatOS 2.1 macro: SDCARD_PRINT_FILE -> PROCESS_GCODE_FILE,
         # while SDCARD_PRINT_FILE_BASE is the lower-level renamed primitive.
         # Direct use of that primitive must not bypass protected printing.
@@ -185,6 +208,64 @@ class AutoXYRC16Handoff:
                 self._retention_next = eventtime + 3600.
         return eventtime + 30.
 
+    def _release_print_lock(self):
+        if self._print_lock_fd is not None:
+            fd, self._print_lock_fd = self._print_lock_fd, None
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
+
+    def _print_lock_tick(self, eventtime):
+        """Reap only AFTER virtual SD has closed the selected file.
+
+        Paused prints retain file_path and are never released. This is a
+        constant-time status check; it performs no filesystem scanning.
+        """
+        if self._print_lock_fd is None:
+            return self.printer.get_reactor().NEVER
+        if self.busy:
+            return eventtime + 2.
+        try:
+            status = self.ratos.v_sd.get_status(eventtime)
+            if status.get('is_active') is False and status.get('file_path') in (None, ''):
+                self._release_print_lock()
+                return self.printer.get_reactor().NEVER
+        except Exception:
+            logging.exception('RC16 cannot verify virtual-SD closure; keeping print file locked')
+        return eventtime + 2.
+
+    def _acquire_print_lock(self, gcmd):
+        if self._print_lock_fd is not None:
+            # A prior file may have just completed, but the timer has not
+            # executed. Reap synchronously only when virtual SD is CLOSED.
+            self._print_lock_tick(self.printer.get_reactor().monotonic())
+        if self._print_lock_fd is not None:
+            raise gcmd.error('RC16: previous print file remains selected; reset/unload it first')
+        path = self.registry / RETENTION_LOCK_NAME
+        fd = None
+        try:
+            fd = os.open(str(path), os.O_RDWR | getattr(os, 'O_NOFOLLOW', 0))
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise CoordinatorError('Invalid retention ownership lock')
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            self._print_lock_fd = fd
+            return
+        except (OSError, CoordinatorError) as exc:
+            if fd is not None:
+                os.close(fd)
+            raise gcmd.error('RC16 print delayed while retention owns files: ' + str(exc))
+
+    def _schedule_print_lock_reaper(self):
+        if self._print_lock_fd is None:
+            return
+        reactor = self.printer.get_reactor()
+        when = reactor.monotonic() + 2.
+        if self._print_lock_timer is None:
+            self._print_lock_timer = reactor.register_timer(self._print_lock_tick, when)
+        else:
+            reactor.update_timer(self._print_lock_timer, when)
+
     def cmd_direct_base(self, gcmd):
         # A direct primitive invocation skips RatOS and hides IDEX mode.
         # Reject instead of silently running an independent two-tool job.
@@ -269,6 +350,7 @@ class AutoXYRC16Handoff:
         self.busy = True
         stage_name = None
         handed_to_sd = False
+        owns_print_lock = False
         try:
             # COPY/MIRROR cannot require independent nozzle XY alignment.
             # Preserve native RatOS processing end-to-end with no AutoXY file
@@ -277,6 +359,11 @@ class AutoXYRC16Handoff:
             initial_mode = self._mode()
             if initial_mode in ('copy', 'mirror'):
                 return self._native_processor(gcmd)
+            # This shared lock is held for the *entire* generated-file print,
+            # not just staging. Retention takes an exclusive lock and cannot
+            # delete a selected/paused/printing generated G-code file.
+            self._acquire_print_lock(gcmd)
+            owns_print_lock = True
             # Native RatOS bypass/transform options cannot guarantee safe
             # independent IDEX preparation; do not guess an unseen print mode.
             if self.ratos.bypass_post_processing or not self.ratos.enable_gcode_transform:
@@ -355,15 +442,29 @@ class AutoXYRC16Handoff:
                 raise CoordinatorError('Prepared file changed after reprint registration')
             # Arm the one-use protected controller ONLY for eligible dual-tool
             # independent prints (the six injected macros enforce the hold).
-            handed_to_sd = True
             result = self.ratos.v_sd.cmd_SDCARD_PRINT_FILE(
                 FilenameProxy(gcmd, stage_name))
+            handed_to_sd = True
+            self._schedule_print_lock_reaper()
             return result
         except Exception as exc:
             logging.exception('AutoXY RC16 guarded print preparation refused')
             raise gcmd.error('AutoXY RC16 print not started: ' + str(exc))
         finally:
             self.busy = False
+            # If native SD never accepted the file, there is no held print.
+            # If it did accept despite an exception, retain the lock and use
+            # the timer/status gate; never guess based on a return value alone.
+            if owns_print_lock and not handed_to_sd:
+                try:
+                    status = self.ratos.v_sd.get_status(
+                        self.printer.get_reactor().monotonic())
+                    if status.get('is_active') is False and status.get('file_path') in (None, ''):
+                        self._release_print_lock()
+                    else:
+                        self._schedule_print_lock_reaper()
+                except Exception:
+                    logging.exception('RC16 could not prove rejected SD was closed; keeping lock')
             # Keep staged files, even on failure: a timed-out worker can still
             # be exiting, and cleanup/ownership is not yet release-qualified.
             if stage_name and not handed_to_sd:
