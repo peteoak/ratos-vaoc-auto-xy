@@ -67,6 +67,14 @@ class AutoXYRC16Handoff:
         self.gcode.register_command('AUTOXY_RC16_HANDOFF_STATUS', self.cmd_status)
         self.printer.register_event_handler('klippy:ready', self.on_ready)
 
+    def get_status(self, eventtime):
+        # Read-only Klipper status for installer verification. 'armed' becomes
+        # True only AFTER native processing and bypass handlers are installed.
+        return {'enabled': bool(self.enabled),
+                'armed': bool(self.installed),
+                'busy': bool(self.busy),
+                'retention_enabled': bool(self.retention_enabled)}
+
     def cmd_status(self, gcmd):
         gcmd.respond_info('AutoXY RC16 handoff prototype: enabled=%s armed=%s busy=%s' %
                           (self.enabled, self.installed, self.busy))
