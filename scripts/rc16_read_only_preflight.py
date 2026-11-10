@@ -71,13 +71,17 @@ def runtime_summary(url=MOONRAKER_QUERY):
     state = objects.get('print_stats', {}).get('state', 'UNKNOWN')
     vaoc = objects.get('gcode_macro _VAOC', {}).get('is_started')
     heaters = [objects.get(k, {}) for k in ('heater_bed', 'extruder', 'extruder1')]
-    # Klipper toolhead status does not expose a live velocity field. Require\n    # a positive idle_timeout state instead; unknown/Ready/Printing fail closed.\n    idle_state = objects.get('idle_timeout', {}).get('state')\n    idle = (idle_state == 'Idle'\n            and state in ('standby', 'complete', 'cancelled', 'error')
-            and sd.get('is_active') is False
-            and sd.get('file_path') in (None, '')
-            and vaoc is False
-            and all(float(h.get('target', -1)) == 0 and
-                    float(h.get('temperature', 100)) < 50 for h in heaters)
-            )
+    # Require a positive Klipper idle_timeout state; unknown states fail closed.
+    idle_state = objects.get('idle_timeout', {}).get('state')
+    idle = (
+        idle_state == 'Idle'
+        and state in ('standby', 'complete', 'cancelled', 'error')
+        and sd.get('is_active') is False
+        and sd.get('file_path') in (None, '')
+        and vaoc is False
+        and all(float(h.get('target', -1)) == 0 and
+                float(h.get('temperature', 100)) < 50 for h in heaters)
+    )
     vars_ = objects.get('save_variables', {}).get('variables', {})
     keys = ('idex_xoffset', 'idex_yoffset', 'idex_zoffset')
     present = all(k in vars_ for k in keys)
@@ -90,7 +94,7 @@ def runtime_summary(url=MOONRAKER_QUERY):
 
 def vision_summary(home):
     python = home / 'auto-xy-venv/bin/python'
-    if not python.is_file() or python.is_symlink():
+    if not python.is_file() or not os.access(python, os.X_OK):
         return 'NOT_FOUND'
     try:
         call = subprocess.run(
