@@ -359,6 +359,10 @@ def main(argv=None):
             print('RC16 ROLLBACK VERIFIED, restored RC15 files from:', where)
             print('Klipper restart needed while idle. Saved offsets untouched.')
             return 0
+        if args.stage:
+            require(args.offline,
+                    'Disabled staging is offline-development only; '
+                    'use the qualified active RC16 installer')
         changes = check_installation(home, root, live=not args.offline)
         print('RC16 DEV1 preflight PASS; installed controller is exact RC15 Dev6')
         print('Change summary:', ', '.join(changes))
