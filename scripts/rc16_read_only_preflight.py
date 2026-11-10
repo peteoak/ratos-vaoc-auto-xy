@@ -19,7 +19,7 @@ from urllib.request import urlopen
 HOME = Path('/home/pi')
 RC15_GATE_SHA256 = '0a865df007e01e3687f318c300e037c3ca05f6bbdefa13fba99edcb2fdea9df3'
 MOONRAKER_QUERY = ('http://127.0.0.1:7125/printer/objects/query?'
-                   'print_stats&virtual_sdcard&save_variables&toolhead&'
+                   'print_stats&virtual_sdcard&save_variables&idle_timeout&'
                    'heater_bed&extruder&extruder1&gcode_macro%20_VAOC&configfile')
 
 
@@ -71,13 +71,13 @@ def runtime_summary(url=MOONRAKER_QUERY):
     state = objects.get('print_stats', {}).get('state', 'UNKNOWN')
     vaoc = objects.get('gcode_macro _VAOC', {}).get('is_started')
     heaters = [objects.get(k, {}) for k in ('heater_bed', 'extruder', 'extruder1')]
-    idle = (state in ('standby', 'complete', 'cancelled', 'error')
+    # Klipper toolhead status does not expose a live velocity field. Require\n    # a positive idle_timeout state instead; unknown/Ready/Printing fail closed.\n    idle_state = objects.get('idle_timeout', {}).get('state')\n    idle = (idle_state == 'Idle'\n            and state in ('standby', 'complete', 'cancelled', 'error')
             and sd.get('is_active') is False
             and sd.get('file_path') in (None, '')
             and vaoc is False
             and all(float(h.get('target', -1)) == 0 and
                     float(h.get('temperature', 100)) < 50 for h in heaters)
-            and float(objects.get('toolhead', {}).get('velocity', -1)) == 0)
+            )
     vars_ = objects.get('save_variables', {}).get('variables', {})
     keys = ('idex_xoffset', 'idex_yoffset', 'idex_zoffset')
     present = all(k in vars_ for k in keys)
