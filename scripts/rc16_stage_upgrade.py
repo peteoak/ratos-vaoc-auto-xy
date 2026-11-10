@@ -31,7 +31,7 @@ SOURCES = {
     'auto_xy/vision/auto_xy_retention_rc16.py':
         ('src/auto_xy_retention_rc16.py', 'fa5127f19bc7be1adf20ed93c92a831e240e8413'),
     'auto_xy/klipper/auto_xy_ratos_handoff_rc16.py':
-        ('src/auto_xy_ratos_handoff_rc16.py', 'defaddd4b7824dcb05cb251f1faed02c068e1f04'),
+        ('src/auto_xy_ratos_handoff_rc16.py', '2a812be8b2f14b37640ed48c5b2fc6d1571f8449'),
     'auto_xy/workers/rc16_prepare_worker.py':
         ('src/tools/rc16_prepare_worker.py', '32852157d0e2cf3e2d1133bbfe2bad8720fa1f73'),
     'auto_xy/workers/rc16_generated_retention.py':
