@@ -56,7 +56,14 @@ def inventory(root):
             warnings.append('Unfinished or missing report: ' + folder.name)
             continue
         try:
+            report_before = report.stat()
             data = json.loads(report.read_text())
+            report_after = report.stat()
+            def report_identity(st):
+                return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+            if report_identity(report_before) != report_identity(report_after):
+                warnings.append('Changing report protected in ' + folder.name)
+                continue
             status = data.get('status')
             if status not in STATES:
                 warnings.append('Nonterminal/unknown status: ' + folder.name)
@@ -105,7 +112,9 @@ def inventory(root):
                     cat = 'exports'
                 else:
                     cat = STATES[status]
-                run_files.append(_entry(p, cat, folder, status, date))
+                entry = _entry(p, cat, folder, status, date)
+                entry['report_fingerprint'] = report_identity(report_after)
+                run_files.append(entry)
             files.extend(run_files)
             runs.append({'folder': folder, 'report': report, 'status': status,
                          'date': date, 'entries': run_files})
@@ -285,8 +294,17 @@ def execute(root, selected):
             report = p.parent/'report.json'
             if report.is_symlink() or not report.is_file():
                 continue
+            report_before = report.stat()
+            report_id = (report_before.st_dev, report_before.st_ino,
+                         report_before.st_size, report_before.st_mtime_ns,
+                         report_before.st_ctime_ns)
+            if report_id != e.get('report_fingerprint'):
+                continue
             state = json.loads(report.read_text()).get('status')
-            if state not in STATES or state != e['status']:
+            report_after = report.stat()
+            if ((report_after.st_dev, report_after.st_ino, report_after.st_size,
+                 report_after.st_mtime_ns, report_after.st_ctime_ns) != report_id
+                    or state not in STATES or state != e['status']):
                 continue
             st = p.lstat()
             if (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns) != e['fingerprint']:
