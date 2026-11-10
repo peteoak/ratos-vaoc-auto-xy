@@ -402,6 +402,24 @@ class RC16HandoffTests(unittest.TestCase):
         self.obj.cmd_process(Gcmd())
         self.assertEqual(len(self.printer.ratos.v_sd.started), 1)
 
+    def test_retention_scheduler_failure_restores_native_handlers(self):
+        import unittest.mock
+        printer = Printer(self.root)
+        coordinator = mod.AutoXYRC16Handoff(Config(printer))
+        coordinator.worker = WORKER
+        coordinator.worker_python = sys.executable
+        coordinator.registry = self.root / 'failed-retention-registry'
+        coordinator.retention_enabled = True
+        native = printer.ratos.v_sd.cmd_SDCARD_PRINT_FILE
+        original_handlers = dict(printer.gcode.handlers)
+        with unittest.mock.patch.object(printer.reactor, 'register_timer',
+                                        side_effect=OSError('simulated timer failure')):
+            with self.assertRaisesRegex(RuntimeError, 'initialise atomically'):
+                printer.handlers['klippy:ready']()
+        self.assertFalse(coordinator.installed)
+        self.assertEqual(printer.gcode.handlers, original_handlers)
+        self.assertEqual(printer.ratos.v_sd.cmd_SDCARD_PRINT_FILE, native)
+
     def test_missing_sd_selection_guard_refuses_arming_and_restores_handlers(self):
         printer = Printer(self.root)
         del printer.gcode.handlers['M26']
