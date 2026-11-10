@@ -97,6 +97,31 @@ class SoftImageBudgetTests(unittest.TestCase):
         self.assertIn(annotated.name, names)
         self.assertEqual(ret.execute(self.root, selected), len(selected))
 
+    def test_changed_report_after_planning_prevents_deletion(self):
+        folder, raw, annotated = self.add_run(
+            '20261001-090000_print', 'FAILED_DO_NOT_PRINT',
+            900000, 900000, age=40*86400)
+        selected, _, _ = ret.plan(self.root, now=self.now,
+                                  max_total_images_mib=1)
+        self.assertTrue(selected)
+        report = folder / 'report.json'
+        report.write_text(report.read_text() + '\\n ')
+        self.assertEqual(ret.execute(self.root, selected), 0)
+        self.assertTrue(raw.exists() and annotated.exists())
+
+    def test_replaced_report_with_same_state_prevents_deletion(self):
+        folder, raw, annotated = self.add_run(
+            '20261001-090000_print', 'FAILED_DO_NOT_PRINT',
+            900000, 900000, age=40*86400)
+        selected, _, _ = ret.plan(self.root, now=self.now,
+                                  max_total_images_mib=1)
+        report = folder / 'report.json'
+        replacement = folder / 'report.new'
+        replacement.write_bytes(report.read_bytes())
+        os.replace(replacement, report)
+        self.assertEqual(ret.execute(self.root, selected), 0)
+        self.assertTrue(raw.exists() and annotated.exists())
+
     def test_no_hard_capture_gate_is_part_of_retention_policy(self):
         self.assertFalse(hasattr(ret, 'capture_budget'))
         self.assertFalse(hasattr(ret, 'enforce_before_capture'))
