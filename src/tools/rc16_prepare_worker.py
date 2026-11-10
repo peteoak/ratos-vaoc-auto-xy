@@ -125,7 +125,40 @@ def parse_start(line):
     return text.encode('ascii'), shifts, params
 
 
-def stage(root, filename):
+
+def pending_path(registry, stage_name):
+    """Only AutoXY-generated filenames may have a pending ownership record."""
+    match = re.fullmatch(re.escape(PREFIX) + r'([0-9a-f]{24})\.gcode', stage_name)
+    if not match:
+        raise Refuse('Invalid pending stage token')
+    return registry_directory(registry) / (match.group(1) + '.pending.json')
+
+
+def write_pending(registry, stage_name, sha256, byte_count):
+    if registry is None:
+        return
+    if not re.fullmatch(r'[0-9a-f]{64}', sha256) or byte_count < 0:
+        raise Refuse('Invalid pending stage record')
+    path = pending_path(registry, stage_name)
+    record = {'schema': 1, 'kind': 'autoxy_pending_stage',
+              'stage_name': stage_name, 'sha256': sha256,
+              'bytes': byte_count}
+    payload = json.dumps(record, sort_keys=True, separators=(',', ':')).encode('utf-8')
+    # Use atomic replacement for the same token, never alter a symlink.
+    if path.is_symlink():
+        raise Refuse('Unsafe existing pending stage record')
+    temporary = path.with_name('.' + path.name + '.tmp-' + secrets.token_hex(6))
+    try:
+        with open(temporary, 'xb') as output:
+            os.chmod(temporary, 0o600)
+            output.write(payload)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+def stage(root, filename, registry=None):
     source = safe_path(root, filename)
     dest = Path(root).absolute() / (PREFIX + secrets.token_hex(12) + '.gcode')
     tmp = dest.with_name('.' + dest.name + '.partial')
@@ -185,6 +218,7 @@ def stage(root, filename):
                     or identity(before) != identity(source.stat())
                     or total != before.st_size):
                 raise Refuse('Source changed while staging')
+        write_pending(registry, dest.name, h.hexdigest(), total)
         os.replace(tmp, dest)
         return {'status': 'STAGED_NOT_AUTHORIZED', 'stage_name': dest.name,
                 'already_ratos_processed': header_seen == 'supported',
@@ -202,7 +236,7 @@ def replacement(args, params, nl):
     return nl.join(parts) + nl
 
 
-def prepare(root, stage_name, mode):
+def prepare(root, stage_name, mode, registry=None):
     if mode not in ('independent', 'copy', 'mirror'):
         raise Refuse('Unknown physical IDEX mode')
     source = safe_path(root, stage_name, generated=True)
@@ -254,6 +288,8 @@ def prepare(root, stage_name, mode):
             raise Refuse('RatOS metadata or START_PRINT missing')
         if protected:
             os.replace(tmp, source)
+        if registry is not None:
+            write_pending(registry, stage_name, after_hash.hexdigest(), bytes_out)
         return {'status': 'PREPARED_NOT_AUTHORIZED',
                 'stage_name': stage_name, 'protected': protected,
                 'mode': mode, 'input_sha256': before_hash.hexdigest(),
@@ -383,6 +419,9 @@ def register_source(root, stage_name, original, src_sha, final_sha, registry):
     except Exception:
         path.unlink(missing_ok=True)
         raise
+    pending = pending_path(registry, stage_name)
+    if pending.is_file() and not pending.is_symlink():
+        pending.unlink()
     return {'status': 'REGISTERED_NOT_AUTHORIZED', 'stage_name': stage_name,
             'output_sha256': final_sha}
 
@@ -430,9 +469,9 @@ def main(argv=None):
         if hasattr(os, 'nice'):
             os.nice(10)
         if args.action == 'stage':
-            result = stage(args.root, args.source)
+            result = stage(args.root, args.source, registry=args.registry)
         elif args.action == 'prepare':
-            result = prepare(args.root, args.source, args.mode)
+            result = prepare(args.root, args.source, args.mode, registry=args.registry)
         elif args.action == 'verify':
             result = verify(args.root, args.source, args.mode, args.expected_sha256)
         elif args.action == 'register':
