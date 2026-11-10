@@ -112,7 +112,11 @@ class Config:
     def get_printer(self):
         return self.printer
     def getboolean(self, name, default=False):
+        if name == 'retention_enabled':
+            return getattr(self, 'retention_enabled', False)
         return self.enabled
+    def getint(self, name, default=None, **kwargs):
+        return default
     def get(self, name, default=None):
         return default
 
