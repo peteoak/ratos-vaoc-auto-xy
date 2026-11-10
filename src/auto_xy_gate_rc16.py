@@ -1718,15 +1718,9 @@ class AutoXYGate:
             return
         if self.busy: raise gcmd.error('AUTO XY already running')
         if mode=='PRINT':
-            # Reject unknown or independent ordinary starts before the legacy
-            # non-virtual-SD escape hatch. Genuine single/COPY/MIRROR jobs
-            # remain exempt, but cannot borrow a stale retry context.
-            if (self.protected_print_enabled and not self._protected_inside_gate and
-                (self._retry_precommitted or self.pending_print_mode not in
-                 ('SINGLE_TOOL', 'COPY', 'MIRROR'))):
-                raise gcmd.error(
-                    'AutoXY protected print requires AUTOXY_PRINT_CALIBRATE. '
-                    'Ordinary START_PRINT cannot safely hold original G-code.')
+            # Preserve native console-start VAOC. Only virtual-SD jobs require
+            # a protected two-phase print. Direct file bypass is guarded by
+            # the separately registered RC16 virtual-SD coordinator.
             # The original START_PRINT can also run from the RatOS VAOC
             # console workflow; do not launch AutoXY for those calls.
             if not self._retry_precommitted and not self.virtual_sd_active():
