@@ -43,6 +43,8 @@ class ActiveUpgradeTransactionTests(unittest.TestCase):
             self.home, ROOT, live=False)
         self.assertEqual(variant, 'rc15-dev6-reference')
         self.assertIn(upgrade.GATE_CONFIG, changes)
+        self.assertTrue(all(isinstance(value, bytes) for value in changes.values()),
+                        'Every staged file must be supplied as bytes')
         self.assertIn(b'protected_print_enabled: True', changes[upgrade.GATE_CONFIG])
         self.assertIn(b'enabled: True', changes[upgrade.CONFIG])
         self.assertIn(b'retention_enabled: True', changes[upgrade.CONFIG])
