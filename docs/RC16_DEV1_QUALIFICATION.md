@@ -12,8 +12,8 @@ This is the integrated RC16 development line, in [draft PR #8](https://github.co
 - Generated-print reprints are verified, resolved to their original source and freshly staged, never postprocessed twice. Missing/altered source registry or generated-file tampering prevents a reprint.
 - Known direct G-code bypass routes `SDCARD_PRINT_FILE_BASE`, `M23`, and `M26` are blocked while the coordinator is armed; public `SDCARD_PRINT_FILE` still routes normally through RatOS. `M24` stays available for the held-file recovery controller, whose next-file command guards continuation.
 - RC16 fresh-venv compatibility utility has pinned, binary-only trial requirements (`numpy==1.26.4`, `opencv-python-headless==4.11.0.86`), with version/import/function smoke checks and refusal to overwrite an existing environment.
-- `scripts/rc16_stage_upgrade.py` stages the **exactly recognised** installed RC15 Dev6 gate, new worker, handoff, and read-only-by-default G-code retention tool. The new config stays **enabled: False**, the existing RC15 config remains unchanged, and every modified/added file is recorded for exact rollback.
-- Generated-file retention tool is dry-run by default; deletion requires separate explicit confirmation and a positive Moonraker idle check. This is **not yet scheduled automatically**.
+- `scripts/rc16_stage_upgrade.py` stages the **exactly recognised** installed RC15 Dev6 gate, new worker, handoff, and automatically scheduled generated-G-code retention worker. The new config stays **enabled: False**, the existing RC15 config remains unchanged, and every modified/added file is recorded for exact rollback.
+- **Automatic generated-file retention is enabled by default when the RC16 handoff is armed.** A reactor timer checks eligibility after an initial 120-second delay and subsequently about every 24 hours; a separate `nice +10` cleanup subprocess performs bounded batches of up to 10 files per pass, with checks for idle/unselected virtual SD, a nonblocking exclusive cleanup lock, at least 30 days of age for both generated output and its authenticated registry, a checksum match, and repeated printer-idle checks. Originals, recent files, unknown or altered files, symlinks and unregistered failed stages are never removed. The standalone CLI remains dry-run by default unless `--execute --confirm ...` or the internal `--auto` flag is specified. Results are recorded in `retention-last-run.json` without listing filenames. **An RC16 installation staged with `enabled: False` does not run the scheduler until the handoff is explicitly qualified and armed.**
 
 ## Fresh installation versus upgrade
 
@@ -62,3 +62,10 @@ The staging and rollback operations are intentionally separate from `--check`. S
 **Current status: OFFLINE DEVELOPMENT CANDIDATE. No public tag, main merge or routine install.** The old RC15 Dev6 remains the stable public baseline.
 
 The tests demonstrate code paths using mocks and synthetic files only; they **do not** establish actual camera calibration, device endstop behaviour, Beacon ordering, MCU scheduling safety, or reliable native VAOC recovery on a physical printer. Any failed preflight or unverified path means keep RC16 off and retain the known-good installation.
+
+
+## Automatic storage policy (RC16 development update)
+
+The RC16 handoff's installed configuration defaults to `retention_enabled: True`, `retention_days: 30`, and `retention_interval_hours: 24`. This does not turn the unqualified handoff itself on; `enabled: False` remains the safe staging default. After a qualified handoff is activated, automatic cleanup is scheduled internally without requiring a separate cron entry, operator confirmation or manual commands. The separate process never throttles stock RatOS.
+
+Only complete, checksum-verified, registry-owned `__AutoXY_RC16_<token>.gcode` files are eligible. Deletion requires both file and registry to be at least 30 days old and requires the printer to be idle with no selected virtual-SD file. At most ten files are removed per pass. Unknown/unregistered files, interrupted/incomplete staging artifacts and source G-code are preserved, so a later release must also address orphan cleanup in an equally safe fashion. Camera-image retention continues to follow its separate existing policy.
