@@ -44,6 +44,7 @@ class ActiveInstallerTests(unittest.TestCase):
         self.addCleanup(guard.stop)
         self.real_activate = installer.activate_persistent_gate
         self.real_saved_state = installer.saved_state
+        self.real_restore = installer.restore_saved_state
         saved_guard = patch.object(installer, 'saved_state',
                                    return_value=(True, False))
         activation_guard = patch.object(installer, 'activate_persistent_gate')
@@ -200,6 +201,25 @@ class ActiveInstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(installer.InstallationError,
                                         'unresolved state'):
                 installer.saved_state()
+
+    def test_installer_gcode_allowlist_rejects_arbitrary_commands(self):
+        with patch.object(installer, 'urlopen') as send:
+            with self.assertRaisesRegex(installer.InstallationError, 'Disallowed'):
+                installer.post_gcode('G28')
+            with self.assertRaisesRegex(installer.InstallationError, 'Disallowed'):
+                installer.post_gcode('SAVE_VARIABLE VARIABLE=idex_xoffset VALUE=999')
+            send.assert_not_called()
+
+    def test_restore_saved_state_reverts_enabled_and_measure_only(self):
+        with patch.object(installer, 'saved_state', return_value=(True, False)), \
+             patch.object(installer, 'post_gcode') as send, \
+             patch.object(installer, 'restore_saved_state',
+                          wraps=self.real_restore):
+            installer.restore_saved_state((False, True))
+            self.assertEqual(
+                [call.args[0] for call in send.call_args_list],
+                ['SAVE_VARIABLE VARIABLE=auto_xy_v2_enabled VALUE=0',
+                 'SAVE_VARIABLE VARIABLE=auto_xy_v2_measure_only VALUE=1'])
 
 
 if __name__ == '__main__':
