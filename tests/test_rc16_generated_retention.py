@@ -100,10 +100,54 @@ class GeneratedRetentionTests(unittest.TestCase):
 
     def test_recent_file_preserved_even_if_registry_expired(self):
         os.utime(self.file, None)
-        # Policy is based on complete run registry closure rather than
-        # output file mtime, whose timestamp may be updated after publish.
         result = ret.clean(self.root, self.registry, now=self.now)
-        self.assertEqual(result['eligible_count'], 1)
+        self.assertEqual(result['eligible_count'], 0)
+        self.assertTrue(self.file.exists())
+
+    def test_automatic_cleanup_needs_no_manual_confirmation(self):
+        calls = []
+        result = ret.clean(
+            self.root, self.registry, execute=True, auto=True,
+            now=self.now, idle_probe=lambda: calls.append(True))
+        self.assertEqual(result['deleted_count'], 1)
+        self.assertGreaterEqual(len(calls), 2)
+        self.assertFalse(self.file.exists())
+
+    def test_auto_without_execute_is_rejected(self):
+        with self.assertRaises(ret.Refuse):
+            ret.clean(self.root, self.registry, auto=True, now=self.now)
+
+    def test_auto_stops_if_printer_becomes_busy(self):
+        called = []
+        def changing():
+            called.append(True)
+            if len(called) >= 2:
+                raise ret.Refuse('printer busy')
+        result = ret.clean(
+            self.root, self.registry, execute=True, auto=True,
+            now=self.now, idle_probe=changing)
+        self.assertEqual(result['deleted_count'], 0)
+        self.assertTrue(self.file.exists())
+
+    def test_report_contains_no_filenames_or_paths(self):
+        result = ret.clean(self.root, self.registry, now=self.now)
+        ret.write_report(self.registry, result)
+        report = (self.registry / ret.REPORT_NAME).read_text()
+        self.assertNotIn(self.name, report)
+        self.assertNotIn(str(self.root), report)
+
+    def test_limited_batch_does_not_delete_all_at_once(self):
+        result = ret.clean(
+            self.root, self.registry, execute=True, auto=True,
+            max_delete=1, now=self.now, idle_probe=lambda: True)
+        self.assertEqual(result['deleted_count'], 1)
+
+    def test_unknown_original_is_never_deleted(self):
+        source = self.root / 'original.gcode'
+        source.write_bytes(b'G1 X20\n')
+        ret.clean(self.root, self.registry, execute=True, auto=True,
+                  now=self.now, idle_probe=lambda: True)
+        self.assertEqual(source.read_bytes(), b'G1 X20\n')
 
 
 if __name__ == '__main__':
