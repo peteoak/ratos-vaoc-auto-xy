@@ -29,11 +29,11 @@ SOURCES = {
     'auto_xy/klipper/auto_xy_gate.py':
         ('src/auto_xy_gate_rc16.py', '95bf8077dcf9e05081714fcde85a18d2f383b96d'),
     'auto_xy/klipper/auto_xy_ratos_handoff_rc16.py':
-        ('src/auto_xy_ratos_handoff_rc16.py', '449d1e71662f8c87d0f17b5c8d648ba7029cb50e'),
+        ('src/auto_xy_ratos_handoff_rc16.py', 'cca96a0c94233380dbd4a9797c1a31b3d0b7b15a'),
     'auto_xy/workers/rc16_prepare_worker.py':
         ('src/tools/rc16_prepare_worker.py', '47808233086e234f72e04ffef2b0ab9329238156'),
     'auto_xy/workers/rc16_generated_retention.py':
-        ('src/tools/rc16_generated_retention.py', '9829d3e11e5a855ecf53723385ae1c37b9467706'),
+        ('src/tools/rc16_generated_retention.py', '47206cc8c355f2f8c4090be8f06359c057652c6e'),
 }
 LINK = 'klipper/klippy/extras/auto_xy_ratos_handoff_rc16.py'
 CONFIG = 'printer_data/config/auto_xy_rc16.cfg'
@@ -108,7 +108,12 @@ def config_text(home):
             'enabled: False\n'
             'worker: ' + str(home / 'auto_xy/workers/rc16_prepare_worker.py') + '\n'
             'worker_python: /usr/bin/python3\n'
-            'registry_directory: ' + str(home / 'auto_xy/rc16_registry') + '\n')
+            'registry_directory: ' + str(home / 'auto_xy/rc16_registry') + '\n'
+            '# Automatically clean generated RC16 G-code after 30 idle days.\n'
+            'retention_enabled: True\n'
+            'retention_days: 30\n'
+            'retention_interval_hours: 24\n'
+            'retention_worker: ' + str(home / 'auto_xy/workers/rc16_generated_retention.py') + '\n')
 
 
 def check_installation(home, repo, live):
