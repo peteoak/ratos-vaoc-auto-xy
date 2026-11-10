@@ -71,10 +71,12 @@ def runtime_summary(url=MOONRAKER_QUERY):
     state = objects.get('print_stats', {}).get('state', 'UNKNOWN')
     vaoc = objects.get('gcode_macro _VAOC', {}).get('is_started')
     heaters = [objects.get(k, {}) for k in ('heater_bed', 'extruder', 'extruder1')]
-    # Require a positive Klipper idle_timeout state; unknown states fail closed.
+    # 'Ready' is Klipper's post-command, pre-idle-timeout state. Accept it
+    # only when print, virtual SD, VAOC and heater checks also pass.
+    # This is a snapshot for diagnosis, NOT installation authorisation.
     idle_state = objects.get('idle_timeout', {}).get('state')
     idle = (
-        idle_state == 'Idle'
+        idle_state in ('Idle', 'Ready')
         and state in ('standby', 'complete', 'cancelled', 'error')
         and sd.get('is_active') is False
         and sd.get('file_path') in (None, '')
