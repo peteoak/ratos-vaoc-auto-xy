@@ -142,6 +142,58 @@ class GeneratedRetentionTests(unittest.TestCase):
             max_delete=1, now=self.now, idle_probe=lambda: True)
         self.assertEqual(result['deleted_count'], 1)
 
+    def test_verified_abandoned_stage_deleted_after_retention(self):
+        import hashlib
+        stage = self.root / ('__AutoXY_RC16_' + 'c' * 24 + '.gcode')
+        payload = b'; unfinished stage\\nG1 X22\\n'
+        stage.write_bytes(payload)
+        pending = self.registry / ('c' * 24 + '.pending.json')
+        pending.write_text(json.dumps({
+            'schema': 1, 'kind': 'autoxy_pending_stage',
+            'stage_name': stage.name, 'bytes': len(payload),
+            'sha256': hashlib.sha256(payload).hexdigest()
+        }))
+        old = self.now - 31*86400
+        os.utime(stage, (old, old))
+        os.utime(pending, (old, old))
+        found = ret.pending_candidates(self.root, self.registry, now=self.now)
+        self.assertEqual(len(found), 1)
+        result = ret.clean(self.root, self.registry, execute=True, auto=True,
+                           now=self.now, idle_probe=lambda: True)
+        self.assertEqual(result['pending_deleted_count'], 1)
+        self.assertFalse(stage.exists())
+        self.assertFalse(pending.exists())
+
+    def test_changed_abandoned_stage_never_deleted(self):
+        stage = self.root / ('__AutoXY_RC16_' + 'd' * 24 + '.gcode')
+        stage.write_bytes(b'changed G-code')
+        pending = self.registry / ('d' * 24 + '.pending.json')
+        pending.write_text(json.dumps({
+            'schema': 1, 'kind': 'autoxy_pending_stage',
+            'stage_name': stage.name, 'bytes': 22,
+            'sha256': 'a'*64
+        }))
+        old = self.now - 31*86400
+        os.utime(stage, (old, old))
+        os.utime(pending, (old, old))
+        result = ret.clean(self.root, self.registry, execute=True, auto=True,
+                           now=self.now, idle_probe=lambda: True)
+        self.assertEqual(result['pending_deleted_count'], 0)
+        self.assertTrue(stage.exists() and pending.exists())
+
+    def test_successfully_registered_file_protects_stale_pending(self):
+        import hashlib
+        pending = self.registry / ('b' * 24 + '.pending.json')
+        pending.write_text(json.dumps({
+            'schema': 1, 'kind': 'autoxy_pending_stage',
+            'stage_name': self.name, 'bytes': len(self.original),
+            'sha256': hashlib.sha256(self.original).hexdigest()
+        }))
+        old = self.now - 31*86400
+        os.utime(pending, (old, old))
+        # The ordinary final record exists: pending cleanup must ignore it.
+        self.assertEqual(ret.pending_candidates(self.root, self.registry, now=self.now), [])
+
     def test_unknown_original_is_never_deleted(self):
         source = self.root / 'original.gcode'
         source.write_bytes(b'G1 X20\n')
