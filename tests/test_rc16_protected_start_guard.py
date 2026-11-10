@@ -29,7 +29,7 @@ class ProtectedStartGuardTests(unittest.TestCase):
                         'Console-started native VAOC must not be rejected by print-file guard')
 
     def test_positive_two_tool_capture_requires_protected_begin(self):
-        capture = self.body('cmd_AUTO_XY_CAPTURE_PRINT_MODE')
+        capture = self.body('cmd_AUTO_XY_CAPTURE_MODE')
         self.assertIn("requested=='INDEPENDENT'", capture)
         self.assertIn("session.get('phase')!='PREPARING'", capture)
         self.assertIn('unprotected two-tool G-code refused before bed heat', capture)
