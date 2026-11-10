@@ -454,6 +454,8 @@ class AutoXYRC16Handoff:
             raise gcmd.error('RC16 handoff not armed or another request is running')
         if self.ratos.v_sd.cmd_SDCARD_PRINT_FILE != self._guard_sd_open:
             raise gcmd.error('RC16 direct virtual-SD guard was replaced; print refused')
+        if self.ratos.v_sd.do_resume != self._guard_do_resume:
+            raise gcmd.error('RC16 virtual-SD resume guard was replaced; print refused')
         # A cleanup worker may be deleting an expired generated file. Refuse
         # the new start rather than racing its file lifecycle. Retry normally.
         if self._retention_proc is not None and self._retention_proc.poll() is None:
