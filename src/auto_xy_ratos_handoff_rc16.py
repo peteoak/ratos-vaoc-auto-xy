@@ -174,22 +174,27 @@ class AutoXYRC16Handoff:
             ratos.v_sd.cmd_SDCARD_PRINT_FILE = self._guard_sd_open
             if ratos.v_sd.cmd_SDCARD_PRINT_FILE != self._guard_sd_open:
                 raise CoordinatorError('Virtual SD API interception not retained')
+            if self.retention_enabled:
+                reactor = self.printer.get_reactor()
+                self._retention_next = reactor.monotonic() + 120.
+                self._retention_timer = reactor.register_timer(
+                    self._retention_tick, self._retention_next)
         except Exception as exc:
-            for name, old_handler in reversed(installed):
-                self.gcode.register_command(name, None)
-                self.gcode.register_command(name, old_handler)
-            self.gcode.register_command('PROCESS_GCODE_FILE', None)
-            self.gcode.register_command('PROCESS_GCODE_FILE', old_processor)
-            self.gcode.register_command('SDCARD_PRINT_FILE_BASE', None)
-            self.gcode.register_command('SDCARD_PRINT_FILE_BASE', old_base)
+            # Startup is transactional: never retain half-installed G-code
+            # handlers or a partly wrapped virtual-SD instance after failure.
+            try:
+                ratos.v_sd.cmd_SDCARD_PRINT_FILE = self._native_sd_open
+            finally:
+                for name, old_handler in reversed(installed):
+                    self.gcode.register_command(name, None)
+                    self.gcode.register_command(name, old_handler)
+                self.gcode.register_command('PROCESS_GCODE_FILE', None)
+                self.gcode.register_command('PROCESS_GCODE_FILE', old_processor)
+                self.gcode.register_command('SDCARD_PRINT_FILE_BASE', None)
+                self.gcode.register_command('SDCARD_PRINT_FILE_BASE', old_base)
             raise self.printer.config_error(
-                'RC16 cannot guard direct virtual-SD file starts: ' + str(exc))
+                'RC16 handoff could not initialise atomically: ' + str(exc))
         self.installed = True
-        if self.retention_enabled:
-            reactor = self.printer.get_reactor()
-            self._retention_next = reactor.monotonic() + 120.
-            self._retention_timer = reactor.register_timer(
-                self._retention_tick, self._retention_next)
 
     def _retention_safe_to_start(self):
         # A short in-memory status check ONLY; the cleanup worker makes its
