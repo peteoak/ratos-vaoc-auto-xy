@@ -178,6 +178,7 @@ class AutoXYGate:
                 self.retention_diagnostic_days <= self.retention_report_days and
                 self.retention_exports_days <= self.retention_report_days):
             raise config.error('Image/export retention periods must be <= report retention period')
+        self.retention_total_images_mib=config.getint('retention_max_total_images_mib',512,minval=1,maxval=102400)
         self.retention_mib={kind:config.getint('retention_max_'+kind+'_mib',default,minval=1,maxval=102400)
             for kind,default in (('success_images',256),('failed_images',512),
                                  ('diagnostic_images',512),('reports',128),('exports',128))}
@@ -371,7 +372,7 @@ class AutoXYGate:
                 return eventtime+interval
             if self._retention_proc and self._retention_proc.returncode not in (None,0):
                 logging.warning('Auto XY retention worker exited unsuccessfully; review storage')
-            script=os.path.join(os.path.dirname(self.worker),'auto_xy_retention.py')
+            script=os.path.join(os.path.dirname(self.worker),'auto_xy_retention_rc16.py')
             if not os.path.isfile(script):
                 logging.warning('Auto XY retention worker missing: %s',script)
                 return eventtime+interval
