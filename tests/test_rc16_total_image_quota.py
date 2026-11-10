@@ -122,6 +122,14 @@ class SoftImageBudgetTests(unittest.TestCase):
         self.assertEqual(ret.execute(self.root, selected), 0)
         self.assertTrue(raw.exists() and annotated.exists())
 
+    def test_scheduled_controller_forwards_configured_total_image_limit(self):
+        controller = (ROOT / 'src/auto_xy_gate_rc16.py').read_text(encoding='utf-8')
+        start = controller.index('    def _retention_tick(')
+        end = controller.index('    def ensure_commissioned(', start)
+        scheduled = controller[start:end]
+        self.assertIn("'--max-total-images-mib',str(self.retention_total_images_mib)",
+                      scheduled)
+
     def test_no_hard_capture_gate_is_part_of_retention_policy(self):
         self.assertFalse(hasattr(ret, 'capture_budget'))
         self.assertFalse(hasattr(ret, 'enforce_before_capture'))
