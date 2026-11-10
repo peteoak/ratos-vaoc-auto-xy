@@ -177,7 +177,7 @@ class ActiveInstallerTests(unittest.TestCase):
     def test_rollback_restores_original_disabled_flags(self):
         def restore(original):
             self.assertEqual(original, (False, True))
-        with patch.object(installer, 'saved_state', return_value=(False, True)), \\
+        with patch.object(installer, 'saved_state', return_value=(False, True)), \
              patch.object(installer, 'restore_saved_state', side_effect=restore) as restored:
             with self.assertRaisesRegex(installer.InstallationError,
                                         'prior installation restored'):
@@ -193,7 +193,7 @@ class ActiveInstallerTests(unittest.TestCase):
             'auto_xy_v2_enabled': 0, 'auto_xy_v2_fault': 1,
             'auto_xy_v2_measure_only': 0}}}
         with patch.object(installer, 'query_json',
-                          return_value={'result': {'status': status}}), \\
+                          return_value={'result': {'status': status}}), \
              patch.object(installer, 'saved_state', wraps=installer.saved_state):
             with self.assertRaisesRegex(installer.InstallationError,
                                         'unresolved state'):
