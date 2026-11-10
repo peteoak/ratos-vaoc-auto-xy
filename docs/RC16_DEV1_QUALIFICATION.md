@@ -90,3 +90,24 @@ The preparation worker now writes a deterministic **pending-stage ownership reco
 The image cleaner independently verifies a terminal report's inode/mtime/size identity both at planning and immediately before deletion, rejecting changes to the report. It retains the configurable **soft** 512 MiB combined image target; cleanup never refuses new camera captures.
 
 **Offline tests:** 178 executed, no failures, 5 expected skips, from GitHub Actions run 42747058849. Printer-specific validation still required; do not enable RC16 before supervised qualification.
+
+
+## Read-only first hardware preflight (2026-11-10)
+
+The repository now includes `scripts/rc16_read_only_preflight.py`, a self-contained,
+read-only report for a commissioned RatOS 2.1 printer. It only reads installed
+RC15 file metadata and source hashes, queries Moonraker's local object status,
+and checks Python/NumPy/OpenCV versions. It emits compatibility categories,
+**not** raw configuration, saved offset values, camera URLs, serials or files.
+
+A supervised operator, when the printer is idle with all heaters cool, can
+review the source on GitHub and then run it through Python without downloading
+or installing files:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/peteoak/ratos-vaoc-auto-xy/dev/rc16-resource-aware-integration/scripts/rc16_read_only_preflight.py | python3 -B -
+```
+
+This does not grant any authority to install RC16. The report helps decide
+which RatOS, camera and dependency compatibility checks still require
+printer-specific follow-up. No live action is part of the offline CI.
