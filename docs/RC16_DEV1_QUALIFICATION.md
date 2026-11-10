@@ -68,7 +68,7 @@ The tests demonstrate code paths using mocks and synthetic files only; they **do
 
 The RC16 handoff's installed configuration defaults to `retention_enabled: True`, `retention_days: 30`, and `retention_interval_hours: 24`. This does not turn the unqualified handoff itself on; `enabled: False` remains the safe staging default. After a qualified handoff is activated, automatic cleanup is scheduled internally without requiring a separate cron entry, operator confirmation or manual commands. The separate process never throttles stock RatOS.
 
-Only complete, checksum-verified, registry-owned `__AutoXY_RC16_<token>.gcode` files are eligible. Deletion requires both file and registry to be at least 30 days old and requires the printer to be idle with no selected virtual-SD file. At most ten files are removed per pass. Unknown/unregistered files, interrupted/incomplete staging artifacts and source G-code are preserved, so a later release must also address orphan cleanup in an equally safe fashion. Camera-image retention continues to follow its separate existing policy.
+Only complete, checksum-verified, registry-owned `__AutoXY_RC16_<token>.gcode` files are eligible. Deletion requires both file and registry to be at least 30 days old and requires the printer to be idle with no selected virtual-SD file. At most ten files are removed per pass. Unknown generated files without authenticated ownership and altered outputs remain preserved. Pending-stage files with matching ownership and checksums are eligible for 30-day idle cleanup. Camera-image retention continues to follow its separate existing policy.
 
 ## Soft total-image storage limit (2026-11-10)
 
@@ -79,3 +79,14 @@ Normal age-based cleanup remains (successful 7 days, failed 30 days, diagnostic 
 If unknown/active images prevent achieving the target, the worker reports a warning and **calibration and new image capture continue normally**. Usage may temporarily exceed the target during active sessions. Cleanup runs only outside ongoing calibration/print/recovery through the existing controller's nonblocking background retention mechanism; stock RatOS is not throttled.
 
 This is distinct from the 30-day generated-G-code retention worker, which manages generated print files rather than calibration images. Both policies are configured for RC16 but are not active on the user's installed RC15 until the RC16 development build is qualified and installed.
+
+
+## Generated-file lifetime and orphan cleanup audit (2026-11-10)
+
+The coordinator acquires a nonblocking **shared file ownership lock** before staging an independent print, retaining it throughout the selected/printing/paused virtual-SD file lifetime. The external generated-file cleanup obtains an **exclusive lock** and checks Moonraker's idle/unselected-file status repeatedly. A new print start is rejected if cleanup owns the lock. The last lock is released only after Klipper reports virtual SD closed and inactive, including completion, cancellation or explicit reset. COPY/MIRROR reject any previously generated protected RC16 file instead of bypassing verification through native RatOS.
+
+The preparation worker now writes a deterministic **pending-stage ownership record** before publishing a generated file. On complete protected preparation the record is updated with the final SHA-256. Successful registry publication removes the pending record. The idle retention worker can delete aged, checksum-matched pending files and orphan pending markers, **but never an unregistered file without a valid ownership record or a modified output**. Cleanup remains capped per pass and uses the same lock, with 30-day age checks.
+
+The image cleaner independently verifies a terminal report's inode/mtime/size identity both at planning and immediately before deletion, rejecting changes to the report. It retains the configurable **soft** 512 MiB combined image target; cleanup never refuses new camera captures.
+
+**Offline tests:** 178 executed, no failures, 5 expected skips, from GitHub Actions run 42747058849. Printer-specific validation still required; do not enable RC16 before supervised qualification.
