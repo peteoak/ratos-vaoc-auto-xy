@@ -42,6 +42,13 @@ class ActiveInstallerTests(unittest.TestCase):
                              original_check(home, root, live=False))
         guard.start()
         self.addCleanup(guard.stop)
+        saved_guard = patch.object(installer, 'saved_state',
+                                   return_value=(True, False))
+        activation_guard = patch.object(installer, 'activate_persistent_gate')
+        restore_guard = patch.object(installer, 'restore_saved_state')
+        for item in (saved_guard, activation_guard, restore_guard):
+            item.start()
+            self.addCleanup(item.stop)
 
     def assert_restored(self):
         self.assertEqual(self.gate.read_bytes(), self.previous_gate)
@@ -146,6 +153,51 @@ class ActiveInstallerTests(unittest.TestCase):
                 installer.check_active_runtime(timeout=2, sleep=lambda _: None)
             state['save_variables']['variables']['auto_xy_v2_fault'] = 0
             installer.check_active_runtime(timeout=2, sleep=lambda _: None)
+
+    def test_activation_requires_armed_processor_before_auto_on(self):
+        status = {
+            'configfile': {'settings': {
+                'auto_xy_gate': {'protected_print_enabled': True},
+                'auto_xy_ratos_handoff_rc16': {'enabled': True}}},
+            'auto_xy_ratos_handoff_rc16': {'armed': True}}
+        def response(url):
+            return ({'result': {'state': 'ready'}} if url == installer.INFO_URL
+                    else {'result': {'status': status}})
+        with patch.object(installer, 'query_json', side_effect=response), \
+             patch.object(installer, 'saved_state', return_value=(False, False)), \
+             patch.object(installer, 'post_gcode') as send, \
+             patch.object(installer, 'activate_persistent_gate', wraps=installer.activate_persistent_gate):
+            installer.activate_persistent_gate()
+            send.assert_called_once_with('AUTO_XY_ON')
+            status['auto_xy_ratos_handoff_rc16']['armed'] = False
+            with self.assertRaisesRegex(installer.InstallationError, 'not.*armed'):
+                installer.activate_persistent_gate()
+            self.assertEqual(send.call_count, 1)
+
+    def test_rollback_restores_original_disabled_flags(self):
+        def restore(original):
+            self.assertEqual(original, (False, True))
+        with patch.object(installer, 'saved_state', return_value=(False, True)), \\
+             patch.object(installer, 'restore_saved_state', side_effect=restore) as restored:
+            with self.assertRaisesRegex(installer.InstallationError,
+                                        'prior installation restored'):
+                installer.install(self.home, ROOT, live=True,
+                                  restart=lambda: None,
+                                  verify=lambda: (_ for _ in ()).throw(
+                                      installer.InstallationError('injected')))
+            restored.assert_called_once_with((False, True))
+        self.assert_restored()
+
+    def test_saved_state_refuses_unresolved_faults(self):
+        status = {'save_variables': {'variables': {
+            'auto_xy_v2_enabled': 0, 'auto_xy_v2_fault': 1,
+            'auto_xy_v2_measure_only': 0}}}
+        with patch.object(installer, 'query_json',
+                          return_value={'result': {'status': status}}), \\
+             patch.object(installer, 'saved_state', wraps=installer.saved_state):
+            with self.assertRaisesRegex(installer.InstallationError,
+                                        'unresolved state'):
+                installer.saved_state()
 
 
 if __name__ == '__main__':
