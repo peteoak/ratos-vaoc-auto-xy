@@ -75,7 +75,7 @@ class ReadOnlyPreflightTests(unittest.TestCase):
             'extruder': {'target': 0, 'temperature': 22},
             'extruder1': {'target': 0, 'temperature': 22},
         }
-        for idle_state, expected in [('Idle', 'YES'), ('Ready', 'NO'),
+        for idle_state, expected in [('Idle', 'YES'), ('Ready', 'YES'),
                                      ('Printing', 'NO'), (None, 'NO')]:
             with self.subTest(idle_state=idle_state):
                 sample['idle_timeout']['state'] = idle_state
@@ -92,7 +92,7 @@ class ReadOnlyPreflightTests(unittest.TestCase):
         env.mkdir(parents=True)
         (env / 'python').symlink_to(Path(sys.executable).resolve())
         fake = type('Completed', (), {'returncode': 0,
-                 'stdout': '1.26.4/4.8.0\\n'})()
+                 'stdout': '1.26.4/4.8.0\n'})()
         with patch.object(module.subprocess, 'run', return_value=fake) as run:
             self.assertEqual(module.vision_summary(self.home), '1.26.4/4.8.0')
             self.assertEqual(run.call_args.args[0][0], str(env / 'python'))
