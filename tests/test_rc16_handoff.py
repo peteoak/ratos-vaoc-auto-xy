@@ -253,6 +253,60 @@ class RC16HandoffTests(unittest.TestCase):
         new = self.printer.ratos.v_sd.started[-1]
         self.assertIn(b'BED_TEMP=65', (self.root / new).read_bytes())
 
+    def test_retention_timer_spawns_only_when_idle_and_never_waits(self):
+        from unittest.mock import patch
+        printer = Printer(self.root)
+        config = Config(printer)
+        config.retention_enabled = True
+        controller = mod.AutoXYRC16Handoff(config)
+        controller.worker = WORKER
+        retain = self.root / 'rc16_retention.py'
+        retain.write_text('pass\n')
+        controller.retention_worker = retain
+        controller.registry = self.root / 'registry'
+        controller.registry.mkdir()
+        scheduled = []
+        printer.reactor.register_timer = lambda cb, event: scheduled.append((cb, event))
+        class Stats:
+            def get_status(self, now):
+                return {'state': 'standby'}
+        class SD:
+            def get_status(self, now):
+                return {'is_active': False, 'file_path': None}
+        original_lookup = printer.lookup_object
+        def lookup(name, default=None):
+            return {'print_stats': Stats(), 'virtual_sdcard': SD()}.get(
+                name, original_lookup(name, default))
+        printer.lookup_object = lookup
+        printer.handlers['klippy:ready']()
+        self.assertEqual(len(scheduled), 1)
+        with patch.object(mod.subprocess, 'Popen') as popen:
+            controller._retention_tick(printer.reactor.monotonic() + 125.)
+            self.assertTrue(popen.called)
+            command = popen.call_args.args[0]
+            self.assertIn('--auto', command)
+            self.assertIn('--days', command)
+            self.assertIn('30', command)
+
+    def test_retention_never_starts_while_active_print_or_preparing(self):
+        printer = Printer(self.root)
+        controller = mod.AutoXYRC16Handoff(Config(printer))
+        controller.registry = self.root / 'registry'
+        controller.registry.mkdir()
+        class Stats:
+            def get_status(self, now):
+                return {'state': 'printing'}
+        class SD:
+            def get_status(self, now):
+                return {'is_active': True, 'file_path': 'active.gcode'}
+        original_lookup = printer.lookup_object
+        printer.lookup_object = lambda n, default=None: {
+            'print_stats': Stats(), 'virtual_sdcard': SD()
+        }.get(n, original_lookup(n, default))
+        self.assertFalse(controller._retention_safe_to_start())
+        controller.busy = True
+        self.assertFalse(controller._retention_safe_to_start())
+
     def test_direct_m23_m26_cannot_select_or_seek_past_protection(self):
         for name in ('M23', 'M26'):
             with self.assertRaisesRegex(RuntimeError, 'direct SD selection/seeking blocked'):
