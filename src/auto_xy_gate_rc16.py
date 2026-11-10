@@ -381,7 +381,8 @@ class AutoXYGate:
                   '--failed-days',str(self.retention_failed_days),
                   '--diagnostic-days',str(self.retention_diagnostic_days),
                   '--exports-days',str(self.retention_exports_days),
-                  '--report-days',str(self.retention_report_days)]
+                  '--report-days',str(self.retention_report_days),
+                  '--max-total-images-mib',str(self.retention_total_images_mib)]
             for kind,limit in self.retention_mib.items():
                 args.extend(['--max-'+kind.replace('_','-')+'-mib',str(limit)])
             self._retention_proc=subprocess.Popen(args,stdin=subprocess.DEVNULL,
