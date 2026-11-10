@@ -109,7 +109,7 @@ class ActiveInstallerTests(unittest.TestCase):
                 return {'result': {'state': 'ready'}}
             return {'result': {'status': {
                 'configfile': {'settings': expected},
-                'auto_xy_ratos_handoff_rc16': {'armed': True, 'sd_api_guarded': True},
+                'auto_xy_ratos_handoff_rc16': {'armed': True, 'sd_api_guarded': True, 'resume_api_guarded': True},
                 'save_variables': {'variables': {
                     'auto_xy_v2_enabled': 1,
                     'auto_xy_v2_fault': 0,
@@ -137,7 +137,7 @@ class ActiveInstallerTests(unittest.TestCase):
                 'auto_xy_gate': {'protected_print_enabled': True},
                 'auto_xy_ratos_handoff_rc16': {
                     'enabled': True, 'retention_enabled': True}}},
-            'auto_xy_ratos_handoff_rc16': {'armed': True, 'sd_api_guarded': True},
+            'auto_xy_ratos_handoff_rc16': {'armed': True, 'sd_api_guarded': True, 'resume_api_guarded': True},
             'save_variables': {'variables': {
                 'auto_xy_v2_enabled': 0,
                 'auto_xy_v2_fault': 0,
@@ -173,12 +173,29 @@ class ActiveInstallerTests(unittest.TestCase):
                                         'API guard is not active'):
                 installer.check_active_runtime(timeout=2, sleep=lambda _: None)
 
+    def test_runtime_refuses_missing_resume_api_guard(self):
+        state = {'configfile': {'settings': {
+                     'auto_xy_gate': {'protected_print_enabled': True},
+                     'auto_xy_ratos_handoff_rc16': {
+                         'enabled': True, 'retention_enabled': True}}},
+                 'auto_xy_ratos_handoff_rc16': {
+                     'armed': True, 'sd_api_guarded': True,
+                     'resume_api_guarded': False},
+                 'save_variables': {'variables': {'auto_xy_v2_enabled': 1}}}
+        def response(url):
+            return ({'result': {'state': 'ready'}} if url == installer.INFO_URL
+                    else {'result': {'status': state}})
+        with patch.object(installer, 'query_json', side_effect=response):
+            with self.assertRaisesRegex(installer.InstallationError,
+                                        'resume guard is not active'):
+                installer.check_active_runtime(timeout=2, sleep=lambda _: None)
+
     def test_activation_requires_armed_processor_before_auto_on(self):
         status = {
             'configfile': {'settings': {
                 'auto_xy_gate': {'protected_print_enabled': True},
                 'auto_xy_ratos_handoff_rc16': {'enabled': True}}},
-            'auto_xy_ratos_handoff_rc16': {'armed': True, 'sd_api_guarded': True}}
+            'auto_xy_ratos_handoff_rc16': {'armed': True, 'sd_api_guarded': True, 'resume_api_guarded': True}}
         def response(url):
             return ({'result': {'state': 'ready'}} if url == installer.INFO_URL
                     else {'result': {'status': status}})
