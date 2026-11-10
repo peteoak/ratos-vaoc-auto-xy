@@ -17,7 +17,8 @@ import rc16_stage_upgrade as upgrade
 
 HOME = Path('/home/pi')
 INFO_URL = 'http://127.0.0.1:7125/printer/info'
-CONFIG_URL = 'http://127.0.0.1:7125/printer/objects/query?configfile'
+CONFIG_URL = ('http://127.0.0.1:7125/printer/objects/query?'
+              'configfile&auto_xy_ratos_handoff_rc16')
 RESTART_COMMAND = ('sudo', '-n', 'systemctl', 'restart', 'klipper')
 
 
@@ -43,7 +44,8 @@ def check_active_runtime(timeout=90, sleep=time.sleep):
         try:
             info = query_json(INFO_URL).get('result', {})
             if info.get('state') == 'ready':
-                sections = query_json(CONFIG_URL)['result']['status']['configfile']['settings']
+                status = query_json(CONFIG_URL)['result']['status']
+                sections = status['configfile']['settings']
                 gate = sections.get('auto_xy_gate', {})
                 handoff = sections.get('auto_xy_ratos_handoff_rc16', {})
                 if gate.get('protected_print_enabled') is not True:
@@ -52,6 +54,9 @@ def check_active_runtime(timeout=90, sleep=time.sleep):
                     raise InstallationError('RC16 native print-file handoff is not enabled')
                 if handoff.get('retention_enabled') is not True:
                     raise InstallationError('Generated G-code cleanup is not enabled')
+                coordinator = status.get('auto_xy_ratos_handoff_rc16', {})
+                if coordinator.get('armed') is not True:
+                    raise InstallationError('RC16 print-file processor is not armed')
                 return
             last = 'Klipper state: ' + str(info.get('state'))
         except InstallationError:
