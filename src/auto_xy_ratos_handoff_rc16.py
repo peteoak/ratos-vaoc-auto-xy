@@ -62,6 +62,8 @@ class AutoXYRC16Handoff:
         self.busy = False
         self._native_sd_open = None
         self._sd_open_permitted = False
+        self._native_do_resume = None
+        self._protected_resume_granted = False
         # Shared nonblocking flock guards the entire prepared-file lifetime,
         # including M25/manual-VAOC pauses. The cleanup worker takes EX lock.
         self._print_lock_fd = None
@@ -76,6 +78,8 @@ class AutoXYRC16Handoff:
                 'armed': bool(self.installed),
                 'sd_api_guarded': bool(self.installed and self._native_sd_open and
                                        self.ratos.v_sd.cmd_SDCARD_PRINT_FILE == self._guard_sd_open),
+                'resume_api_guarded': bool(self.installed and self._native_do_resume and
+                                           self.ratos.v_sd.do_resume == self._guard_do_resume),
                 'busy': bool(self.busy),
                 'retention_enabled': bool(self.retention_enabled)}
 
@@ -173,9 +177,12 @@ class AutoXYRC16Handoff:
         # command routes. Only the coordinator can issue a one-use SD open.
         # Fail startup if the target API cannot be wrapped; never claim armed.
         self._native_sd_open = ratos.v_sd.cmd_SDCARD_PRINT_FILE
+        self._native_do_resume = ratos.v_sd.do_resume
         try:
             ratos.v_sd.cmd_SDCARD_PRINT_FILE = self._guard_sd_open
-            if ratos.v_sd.cmd_SDCARD_PRINT_FILE != self._guard_sd_open:
+            ratos.v_sd.do_resume = self._guard_do_resume
+            if (ratos.v_sd.cmd_SDCARD_PRINT_FILE != self._guard_sd_open or
+                    ratos.v_sd.do_resume != self._guard_do_resume):
                 raise CoordinatorError('Virtual SD API interception not retained')
             if self.retention_enabled:
                 reactor = self.printer.get_reactor()
@@ -187,6 +194,7 @@ class AutoXYRC16Handoff:
             # handlers or a partly wrapped virtual-SD instance after failure.
             try:
                 ratos.v_sd.cmd_SDCARD_PRINT_FILE = self._native_sd_open
+                ratos.v_sd.do_resume = self._native_do_resume
             finally:
                 for name, old_handler in reversed(installed):
                     self.gcode.register_command(name, None)
@@ -335,6 +343,15 @@ class AutoXYRC16Handoff:
                     'PREPARING', 'RETRY_REQUIRED', 'MANUAL_REQUIRED',
                     'MANUAL_ACTIVE', 'MANUAL_AUTHORIZED', 'AUTO_VERIFIED')))
 
+    def _guard_do_resume(self, *args, **kwargs):
+        # Klipper or extensions may call this Python API directly rather
+        # than using M24; enforce the SAME held-file release permission.
+        if self._protected_resume_pending():
+            if not self._protected_resume_granted:
+                raise CoordinatorError('RC16 held print: direct do_resume bypass refused')
+            self._protected_resume_granted = False
+        return self._native_do_resume(*args, **kwargs)
+
     def cmd_m24(self, gcmd):
         if self._protected_resume_pending():
             raise gcmd.error(
@@ -350,7 +367,13 @@ class AutoXYRC16Handoff:
                 or session.get('phase') not in ('MANUAL_AUTHORIZED',
                                                 'AUTO_VERIFIED')):
             raise gcmd.error('RC16: no authorised held-print continuation')
-        return self._native_m24(gcmd)
+        if self.ratos.v_sd.do_resume != self._guard_do_resume:
+            raise gcmd.error('RC16 resume API guard was replaced; continuation refused')
+        self._protected_resume_granted = True
+        try:
+            return self._native_m24(gcmd)
+        finally:
+            self._protected_resume_granted = False
 
     def cmd_direct_base(self, gcmd):
         # A direct primitive invocation skips RatOS and hides IDEX mode.
