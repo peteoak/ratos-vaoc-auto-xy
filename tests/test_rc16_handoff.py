@@ -4,6 +4,7 @@ Runs a real separate Python worker, but uses a simulated RatOS transformer,
 virtual SD and reactor. No motors, camera or printer side effects.
 """
 import importlib.util
+import fcntl
 import hashlib
 import subprocess
 import sys
@@ -27,6 +28,11 @@ SINGLE = START.replace(b'TOTAL_TOOLSHIFTS=5', b'TOTAL_TOOLSHIFTS=0')
 
 
 class Reactor:
+    NEVER = float('inf')
+    def register_timer(self, callback, when):
+        return (callback, when)
+    def update_timer(self, timer, when):
+        return None
     def monotonic(self):
         return time.monotonic()
     def pause(self, until):
@@ -49,8 +55,17 @@ class Gcmd:
 class VSD:
     def __init__(self):
         self.started = []
+        self.file_path = None
+        self.is_active = False
+    def get_status(self, now):
+        return {'is_active': self.is_active, 'file_path': self.file_path}
     def cmd_SDCARD_PRINT_FILE(self, gcmd):
+        self.file_path = gcmd.get('FILENAME')
+        self.is_active = True
         self.started.append(gcmd.get('FILENAME'))
+    def finish(self):
+        self.is_active = False
+        self.file_path = None
 
 
 class DC:
@@ -252,6 +267,43 @@ class RC16HandoffTests(unittest.TestCase):
         self.obj.cmd_process(Gcmd(name))
         new = self.printer.ratos.v_sd.started[-1]
         self.assertIn(b'BED_TEMP=65', (self.root / new).read_bytes())
+
+    def test_generated_file_lock_blocks_cleanup_during_print_and_pause(self):
+        self.obj.cmd_process(Gcmd())
+        self.assertIsNotNone(self.obj._print_lock_fd)
+        lock_path = self.obj.registry / mod.RETENTION_LOCK_NAME
+        with lock_path.open('rb') as file:
+            with self.assertRaises(BlockingIOError):
+                fcntl.flock(file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.printer.ratos.v_sd.is_active = False
+        self.obj._print_lock_tick(time.monotonic())
+        self.assertIsNotNone(self.obj._print_lock_fd)
+        self.printer.ratos.v_sd.finish()
+        self.obj._print_lock_tick(time.monotonic())
+        self.assertIsNone(self.obj._print_lock_fd)
+        with lock_path.open('rb') as file:
+            fcntl.flock(file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(file.fileno(), fcntl.LOCK_UN)
+
+    def test_second_print_refused_while_selected_file_owns_lock(self):
+        self.obj.cmd_process(Gcmd())
+        with self.assertRaisesRegex(RuntimeError, 'previous print file remains selected'):
+            self.obj.cmd_process(Gcmd())
+        self.assertEqual(len(self.printer.ratos.v_sd.started), 1)
+
+    def test_generated_file_lock_blocks_cleanup_during_print_and_pause(self):
+        self.obj.cmd_process(Gcmd())
+        self.assertIsNotNone(self.obj._print_lock_fd)
+        lock_path = self.obj.registry / mod.RETENTION_LOCK_NAME
+        with lock_path.open('rb') as file:
+            with self.assertRaises(BlockingIOError):
+                fcntl.flock(file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.printer.ratos.v_sd.is_active = False
+        self.obj._print_lock_tick(time.monotonic())
+        self.assertIsNotNone(self.obj._print_lock_fd)
+        self.printer.ratos.v_sd.finish()
+        self.obj._print_lock_tick(time.monotonic())
+        self.assertIsNone(self.obj._print_lock_fd)
 
     def test_retention_timer_spawns_only_when_idle_and_never_waits(self):
         from unittest.mock import patch
