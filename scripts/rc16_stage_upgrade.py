@@ -41,7 +41,8 @@ LINK = 'klipper/klippy/extras/auto_xy_ratos_handoff_rc16.py'
 CONFIG = 'printer_data/config/auto_xy_rc16.cfg'
 PRINTER = 'printer_data/config/printer.cfg'
 OLD_GATE = 'auto_xy/klipper/auto_xy_gate.py'
-MANAGED = frozenset([*SOURCES, LINK, CONFIG, PRINTER])
+GATE_CONFIG = 'printer_data/config/auto_xy.cfg'
+MANAGED = frozenset([*SOURCES, LINK, CONFIG, PRINTER, GATE_CONFIG])
 
 
 class Refuse(RuntimeError):
@@ -163,6 +164,59 @@ def check_installation(home, repo, live):
     changes[LINK] = ('SYMLINK:' +
                      str(home / 'auto_xy/klipper/auto_xy_ratos_handoff_rc16.py')).encode('ascii')
     return changes
+
+
+def check_active_installation(home, repo, live):
+    """Prepare a FULLY ACTIVE upgrade transaction for a recognised RC15 variant.
+
+    Planning only; this is not a live installation entry point. Production
+    activation still needs an atomic restart/health/rollback supervisor.
+    """
+    import rc16_active_migration as active
+
+    _, files = verify_sources(repo)
+    home = Path(home).absolute()
+    require(home.is_dir() and not home.is_symlink(), 'Invalid Pi home')
+    for rel in MANAGED:
+        no_symlink_parents(home, rel)
+    printer = home / PRINTER
+    settings = home / GATE_CONFIG
+    require(printer.is_file() and not printer.is_symlink(),
+            'Missing or symlinked printer.cfg')
+    require(settings.is_file() and not settings.is_symlink(),
+            'Missing or symlinked existing AutoXY configuration')
+    text = printer.read_text(encoding='utf-8')
+    require(text.count(RC15_INCLUDE) == 1 and INCLUDE not in text,
+            'Expected RC15 include and no existing RC16 include')
+
+    # Accept only pinned, reviewed exact controller variants. Existing True is
+    # the normal operating state, not a reason to refuse a migration.
+    plan = active.plan_existing_gate(home)
+    installed = home / OLD_GATE
+    link = home / 'klipper/klippy/extras/auto_xy_gate.py'
+    require(link.is_symlink() and link.resolve() == installed,
+            'Existing controller registration link differs')
+    for rel in (LINK, CONFIG, *[x for x in SOURCES if x != OLD_GATE]):
+        target = home / rel
+        require(not target.exists() and not target.is_symlink(),
+                'RC16 target already present: ' + rel)
+    if live:
+        require(home == HOME, 'Live upgrade requires canonical /home/pi')
+        import install_autoxy
+        install_autoxy.live_safe(home, 'rollback')
+        import ratos_extension
+        snapshot = ratos_extension.snapshot(home)
+        require(snapshot['registered'] == str(installed) and
+                snapshot['link'] == str(installed),
+                'Installed extension registration does not match existing controller')
+
+    changes = dict(files)
+    changes[GATE_CONFIG] = plan['gate_config_bytes']
+    changes[CONFIG] = plan['handoff_config_bytes']
+    changes[PRINTER] = add_include(text)
+    changes[LINK] = ('SYMLINK:' +
+                     str(home / 'auto_xy/klipper/auto_xy_ratos_handoff_rc16.py')).encode('ascii')
+    return plan['variant'], changes
 
 
 def write_atomic(path, data, old_mode=None):
