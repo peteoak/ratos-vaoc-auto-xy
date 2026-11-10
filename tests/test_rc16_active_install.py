@@ -99,7 +99,11 @@ class ActiveInstallerTests(unittest.TestCase):
                 return {'result': {'state': 'ready'}}
             return {'result': {'status': {
                 'configfile': {'settings': expected},
-                'auto_xy_ratos_handoff_rc16': {'armed': True}}}}
+                'auto_xy_ratos_handoff_rc16': {'armed': True},
+                'save_variables': {'variables': {
+                    'auto_xy_v2_enabled': 1,
+                    'auto_xy_v2_fault': 0,
+                    'auto_xy_v2_in_progress': 0}}}}}
         with patch.object(installer, 'query_json', side_effect=response):
             installer.check_active_runtime(timeout=2, sleep=lambda _: None)
             expected['auto_xy_ratos_handoff_rc16']['enabled'] = False
@@ -116,6 +120,32 @@ class ActiveInstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(installer.InstallationError,
                                         'processor is not armed'):
                 installer.check_active_runtime(timeout=2, sleep=lambda _: None)
+
+    def test_runtime_refuses_persistent_off_or_unresolved_fault(self):
+        state = {
+            'configfile': {'settings': {
+                'auto_xy_gate': {'protected_print_enabled': True},
+                'auto_xy_ratos_handoff_rc16': {
+                    'enabled': True, 'retention_enabled': True}}},
+            'auto_xy_ratos_handoff_rc16': {'armed': True},
+            'save_variables': {'variables': {
+                'auto_xy_v2_enabled': 0,
+                'auto_xy_v2_fault': 0,
+                'auto_xy_v2_in_progress': 0}}}
+        def response(url):
+            return ({'result': {'state': 'ready'}} if url == installer.INFO_URL
+                    else {'result': {'status': state}})
+        with patch.object(installer, 'query_json', side_effect=response):
+            with self.assertRaisesRegex(installer.InstallationError,
+                                        'calibration enable is OFF'):
+                installer.check_active_runtime(timeout=2, sleep=lambda _: None)
+            state['save_variables']['variables']['auto_xy_v2_enabled'] = 1
+            state['save_variables']['variables']['auto_xy_v2_fault'] = 1
+            with self.assertRaisesRegex(installer.InstallationError,
+                                        'unresolved safety fault'):
+                installer.check_active_runtime(timeout=2, sleep=lambda _: None)
+            state['save_variables']['variables']['auto_xy_v2_fault'] = 0
+            installer.check_active_runtime(timeout=2, sleep=lambda _: None)
 
 
 if __name__ == '__main__':
