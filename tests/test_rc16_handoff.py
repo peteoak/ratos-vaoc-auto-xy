@@ -410,6 +410,7 @@ class RC16HandoffTests(unittest.TestCase):
         coordinator.worker_python = sys.executable
         coordinator.registry = self.root / 'failed-retention-registry'
         coordinator.retention_enabled = True
+        coordinator.retention_worker = ROOT / 'src/tools/rc16_generated_retention.py'
         native = printer.ratos.v_sd.cmd_SDCARD_PRINT_FILE
         original_handlers = dict(printer.gcode.handlers)
         with unittest.mock.patch.object(printer.reactor, 'register_timer',
