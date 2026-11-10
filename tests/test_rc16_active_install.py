@@ -97,12 +97,24 @@ class ActiveInstallerTests(unittest.TestCase):
         def response(url):
             if url == installer.INFO_URL:
                 return {'result': {'state': 'ready'}}
-            return {'result': {'status': {'configfile': {'settings': expected}}}}
+            return {'result': {'status': {
+                'configfile': {'settings': expected},
+                'auto_xy_ratos_handoff_rc16': {'armed': True}}}}
         with patch.object(installer, 'query_json', side_effect=response):
             installer.check_active_runtime(timeout=2, sleep=lambda _: None)
             expected['auto_xy_ratos_handoff_rc16']['enabled'] = False
             with self.assertRaisesRegex(installer.InstallationError,
                                         'handoff is not enabled'):
+                installer.check_active_runtime(timeout=2, sleep=lambda _: None)
+            expected['auto_xy_ratos_handoff_rc16']['enabled'] = True
+        def unarmed(url):
+            data = response(url)
+            if url == installer.CONFIG_URL:
+                data['result']['status']['auto_xy_ratos_handoff_rc16']['armed'] = False
+            return data
+        with patch.object(installer, 'query_json', side_effect=unarmed):
+            with self.assertRaisesRegex(installer.InstallationError,
+                                        'processor is not armed'):
                 installer.check_active_runtime(timeout=2, sleep=lambda _: None)
 
 
