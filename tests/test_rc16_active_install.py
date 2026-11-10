@@ -178,7 +178,7 @@ class ActiveInstallerTests(unittest.TestCase):
             'configfile': {'settings': {
                 'auto_xy_gate': {'protected_print_enabled': True},
                 'auto_xy_ratos_handoff_rc16': {'enabled': True}}},
-            'auto_xy_ratos_handoff_rc16': {'armed': True}}
+            'auto_xy_ratos_handoff_rc16': {'armed': True, 'sd_api_guarded': True}}
         def response(url):
             return ({'result': {'state': 'ready'}} if url == installer.INFO_URL
                     else {'result': {'status': status}})
