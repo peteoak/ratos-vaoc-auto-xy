@@ -42,6 +42,8 @@ class ActiveInstallerTests(unittest.TestCase):
                              original_check(home, root, live=False))
         guard.start()
         self.addCleanup(guard.stop)
+        self.real_activate = installer.activate_persistent_gate
+        self.real_saved_state = installer.saved_state
         saved_guard = patch.object(installer, 'saved_state',
                                    return_value=(True, False))
         activation_guard = patch.object(installer, 'activate_persistent_gate')
@@ -166,7 +168,7 @@ class ActiveInstallerTests(unittest.TestCase):
         with patch.object(installer, 'query_json', side_effect=response), \
              patch.object(installer, 'saved_state', return_value=(False, False)), \
              patch.object(installer, 'post_gcode') as send, \
-             patch.object(installer, 'activate_persistent_gate', wraps=installer.activate_persistent_gate):
+             patch.object(installer, 'activate_persistent_gate', wraps=self.real_activate):
             installer.activate_persistent_gate()
             send.assert_called_once_with('AUTO_XY_ON')
             status['auto_xy_ratos_handoff_rc16']['armed'] = False
@@ -194,7 +196,7 @@ class ActiveInstallerTests(unittest.TestCase):
             'auto_xy_v2_measure_only': 0}}}
         with patch.object(installer, 'query_json',
                           return_value={'result': {'status': status}}), \
-             patch.object(installer, 'saved_state', wraps=installer.saved_state):
+             patch.object(installer, 'saved_state', wraps=self.real_saved_state):
             with self.assertRaisesRegex(installer.InstallationError,
                                         'unresolved state'):
                 installer.saved_state()
