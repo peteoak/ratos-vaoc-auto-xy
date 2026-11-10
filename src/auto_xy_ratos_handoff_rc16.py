@@ -237,9 +237,17 @@ class AutoXYRC16Handoff:
 
     def _acquire_print_lock(self, gcmd):
         if self._print_lock_fd is not None:
-            # A prior file may have just completed, but the timer has not
-            # executed. Reap synchronously only when virtual SD is CLOSED.
-            self._print_lock_tick(self.printer.get_reactor().monotonic())
+            # A previous print can finish immediately before the next start,
+            # even if its two-second reaper has not fired yet. Check the
+            # actual native virtual-SD state synchronously, without waiting.
+            try:
+                status = self.ratos.v_sd.get_status(
+                    self.printer.get_reactor().monotonic())
+                if (status.get('is_active') is False and
+                        status.get('file_path') in (None, '')):
+                    self._release_print_lock()
+            except Exception:
+                logging.exception('RC16 cannot prove previous file is closed')
         if self._print_lock_fd is not None:
             raise gcmd.error('RC16: previous print file remains selected; reset/unload it first')
         path = self.registry / RETENTION_LOCK_NAME
