@@ -84,7 +84,8 @@ def activate_persistent_gate():
     if (settings.get('auto_xy_gate', {}).get('protected_print_enabled') is not True
             or settings.get('auto_xy_ratos_handoff_rc16', {}).get('enabled') is not True
             or status.get('auto_xy_ratos_handoff_rc16', {}).get('armed') is not True
-            or status.get('auto_xy_ratos_handoff_rc16', {}).get('sd_api_guarded') is not True):
+            or status.get('auto_xy_ratos_handoff_rc16', {}).get('sd_api_guarded') is not True
+            or status.get('auto_xy_ratos_handoff_rc16', {}).get('resume_api_guarded') is not True):
         raise InstallationError('Cannot enable before native print protection is armed')
     enabled, _ = saved_state()
     if not enabled:
@@ -130,6 +131,8 @@ def check_active_runtime(timeout=90, sleep=time.sleep):
                     raise InstallationError('RC16 print-file processor is not armed')
                 if coordinator.get('sd_api_guarded') is not True:
                     raise InstallationError('RC16 direct virtual-SD API guard is not active')
+                if coordinator.get('resume_api_guarded') is not True:
+                    raise InstallationError('RC16 direct virtual-SD resume guard is not active')
                 # The config flags alone do not enable AutoXY. The controller
                 # also reads its persistent SAVE_VARIABLE state on each run.
                 saved = status.get('save_variables', {}).get('variables', {})
