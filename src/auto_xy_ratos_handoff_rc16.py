@@ -291,7 +291,7 @@ class AutoXYRC16Handoff:
             argv.extend(['--mode', mode])
         if expected_hash is not None:
             argv.extend(['--expected-sha256', expected_hash])
-        if action in ('register', 'resolve'):
+        if action in ('stage', 'prepare', 'register', 'resolve'):
             argv.extend(['--registry', str(self.registry)])
         if original is not None:
             argv.extend(['--original', original])
