@@ -20,9 +20,23 @@ class Clock:
         return self.t
 
 
+class Handoff:
+    installed = True
+    def __init__(self):
+        self.releases = []
+    def release_protected_m24(self, gcmd):
+        self.releases.append('M24')
+
+
 class Printer:
+    def __init__(self):
+        self.handoff = Handoff()
     def get_state_message(self):
         return 'Printer ready', 'ready'
+    def lookup_object(self, name, default=None):
+        if name == 'auto_xy_ratos_handoff_rc16':
+            return self.handoff
+        return default
 
 
 class Gcode:
@@ -112,7 +126,7 @@ class ProtectedRecoveryTests(unittest.TestCase):
         gate = fixture('MANUAL_ACTIVE')
         gate.cmd_AUTOXY_MANUAL_ACCEPT_CONTINUE(Cmd())
         self.assertEqual(gate._protected_session['phase'], 'MANUAL_AUTHORIZED')
-        self.assertEqual(gate.gcode.commands, ['M24'])
+        self.assertEqual(gate.printer.handoff.releases, ['M24'])
         self.assertFalse(gate.flags['auto_xy_v2_fault'])
         self.assertFalse(gate.flags['auto_xy_v2_in_progress'])
         gate._protected_printer_file = lambda: ('RC16.gcode', 'printing')
@@ -120,6 +134,14 @@ class ProtectedRecoveryTests(unittest.TestCase):
         self.assertEqual(gate._protected_session['phase'], 'GUARD_CONSUMED')
         with self.assertRaises(Exception):
             gate.cmd_AUTOXY_PRINT_CHECK(Cmd())
+
+    def test_recovery_refuses_release_without_handoff(self):
+        gate = fixture('MANUAL_AUTHORIZED')
+        gate.flags = {'auto_xy_v2_fault': False,
+                      'auto_xy_v2_in_progress': False}
+        gate.printer.handoff = None
+        with self.assertRaisesRegex(Exception, 'print handoff missing'):
+            gate.cmd_AUTOXY_PRINT_CONTINUE(Cmd())
 
     def test_normal_resume_cannot_bypass_barrier(self):
         gate = fixture()
