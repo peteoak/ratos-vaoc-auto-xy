@@ -331,10 +331,9 @@ class AutoXYRC16Handoff:
     def _protected_resume_pending(self):
         session = getattr(self.gate, '_protected_session', None)
         return (isinstance(session, dict)
-                and not session.get('invalid')
-                and session.get('phase') in (
+                and (session.get('invalid') or session.get('phase') in (
                     'PREPARING', 'RETRY_REQUIRED', 'MANUAL_REQUIRED',
-                    'MANUAL_ACTIVE', 'MANUAL_AUTHORIZED', 'AUTO_VERIFIED'))
+                    'MANUAL_ACTIVE', 'MANUAL_AUTHORIZED', 'AUTO_VERIFIED')))
 
     def cmd_m24(self, gcmd):
         if self._protected_resume_pending():
