@@ -123,6 +123,9 @@ def main(argv=None):
         if args.check:
             print('CHECK PASSED; NO FILES CHANGED')
             return 0
+        rc16.require(args.offline,
+                     'Disabled fresh-install workflow is offline-development only; '
+                     'a qualified active RC16 fresh installer is required')
         rc16.require(args.confirm == 'FRESH_RC16_DEV1_DISABLED',
                      'Installation requires --confirm FRESH_RC16_DEV1_DISABLED')
         receipt = fresh_install(home, root, live=not args.offline)
