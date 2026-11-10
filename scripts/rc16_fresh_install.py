@@ -117,6 +117,9 @@ def main(argv=None):
             print('RC16 fresh rollback complete:', result,
                   '(Klipper restart required; saved RatOS offsets unchanged)')
             return 0
+        if args.install:
+            rc16.require(args.offline,
+                         'Disabled fresh installation is offline-development only')
         plan, offsets = preflight(home, root, live=not args.offline)
         print('RC16 DEV1 FRESH PREFLIGHT PASS; source hashes checked,',
               len(plan), 'baseline managed paths')
