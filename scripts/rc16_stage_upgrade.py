@@ -31,11 +31,11 @@ SOURCES = {
     'auto_xy/vision/auto_xy_retention_rc16.py':
         ('src/auto_xy_retention_rc16.py', 'fa5127f19bc7be1adf20ed93c92a831e240e8413'),
     'auto_xy/klipper/auto_xy_ratos_handoff_rc16.py':
-        ('src/auto_xy_ratos_handoff_rc16.py', '97f16bb6d51047c0ba6f3e3c86ab6fa6bae64b61'),
+        ('src/auto_xy_ratos_handoff_rc16.py', '9c3f46a456f680c31a606fbf3e75087724817996'),
     'auto_xy/workers/rc16_prepare_worker.py':
-        ('src/tools/rc16_prepare_worker.py', '47808233086e234f72e04ffef2b0ab9329238156'),
+        ('src/tools/rc16_prepare_worker.py', '32852157d0e2cf3e2d1133bbfe2bad8720fa1f73'),
     'auto_xy/workers/rc16_generated_retention.py':
-        ('src/tools/rc16_generated_retention.py', '47206cc8c355f2f8c4090be8f06359c057652c6e'),
+        ('src/tools/rc16_generated_retention.py', '300d82cd49a45fb365dd8dbb0b6ee6f1634b9a14'),
 }
 LINK = 'klipper/klippy/extras/auto_xy_ratos_handoff_rc16.py'
 CONFIG = 'printer_data/config/auto_xy_rc16.cfg'
