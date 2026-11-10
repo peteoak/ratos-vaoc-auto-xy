@@ -365,6 +365,9 @@ def main(argv=None):
         if args.check:
             print('CHECK PASSED; NO FILES CHANGED')
             return 0
+        require(args.offline,
+                'Disabled staging is an offline-development test only; '
+                'use the active RC16 installer for a qualified live installation')
         require(args.confirm == 'STAGE_RC16_DEV1_DISABLED',
                 'Stage requires --confirm STAGE_RC16_DEV1_DISABLED')
         folder = stage(home, changes)
