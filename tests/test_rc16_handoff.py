@@ -374,6 +374,13 @@ class RC16HandoffTests(unittest.TestCase):
         controller.busy = True
         self.assertFalse(controller._retention_safe_to_start())
 
+    def test_runtime_replacement_of_resume_guard_disarms_print_start(self):
+        self.printer.ratos.v_sd.do_resume = lambda: None
+        self.assertFalse(self.obj.get_status(time.monotonic())['resume_api_guarded'])
+        with self.assertRaisesRegex(RuntimeError, 'resume guard was replaced'):
+            self.obj.cmd_process(Gcmd())
+        self.assertEqual(self.printer.ratos.v_sd.started, [])
+
     def test_runtime_replacement_of_sd_guard_disarms_print_start(self):
         self.printer.ratos.v_sd.cmd_SDCARD_PRINT_FILE = lambda gcmd: None
         self.assertFalse(self.obj.get_status(time.monotonic())['sd_api_guarded'])
