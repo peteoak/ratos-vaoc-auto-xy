@@ -20,8 +20,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-SRC = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(SRC))
+AUTOXY_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(AUTOXY_ROOT / 'vision'))
+sys.path.insert(0, str(AUTOXY_ROOT))
+# In the development checkout the vision detector lives in src/.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from auto_xy_detector import detect
 
 REFERENCE_ROOT = Path('/home/pi/auto_xy/nozzle_references')
