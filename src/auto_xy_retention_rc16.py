@@ -19,6 +19,7 @@ from pathlib import Path
 
 MIB = 1024 * 1024
 DEFAULT_TOTAL_IMAGES_MIB = 512
+DEFAULT_REFERENCE_ROOT = Path('/home/pi/auto_xy/nozzle_references')
 ALL_IMAGE_EXTENSIONS = frozenset(('.jpg', '.jpeg', '.png', '.bmp', '.webp', '.tif', '.tiff'))
 RUN_NAME = re.compile(r'^\d{8}-\d{6}_(print|idle)(?:_\d{2})?$')
 STATES = {
@@ -175,9 +176,24 @@ def plan(root, success_days=7, failed_days=30, report_days=90, now=None,
         raise ValueError('Limits must be 1..102400 MiB')
     if type(max_total_images_mib) is not int or not 1 <= max_total_images_mib <= 102400:
         raise ValueError('Total image soft limit must be 1..102400 MiB')
-    files, runs, warnings = inventory(Path(root))
-    total_image_bytes, inventory_warnings = all_image_usage(Path(root))
+    root = Path(root)
+    reference_root = Path(reference_root) if reference_root is not None else None
+    if reference_root is not None:
+        results_abs = root.resolve(strict=False)
+        references_abs = reference_root.resolve(strict=False)
+        if (results_abs == references_abs or results_abs in references_abs.parents
+                or references_abs in results_abs.parents):
+            raise ValueError('Protected nozzle reference library overlaps disposable results')
+    files, runs, warnings = inventory(root)
+    total_image_bytes, inventory_warnings = all_image_usage(root)
     warnings.extend(inventory_warnings)
+    protected_reference_bytes = 0
+    if reference_root is not None and reference_root.exists():
+        protected_reference_bytes, ref_warnings = all_image_usage(reference_root)
+        warnings.extend('Protected references: ' + x for x in ref_warnings)
+        # Reference images are included in storage accounting, but no reference
+        # path is EVER inserted into deletion eligibility or returned to execute.
+        total_image_bytes += protected_reference_bytes
     chosen = set()
     failed = sorted((r for r in runs if r['status'] == 'FAILED_DO_NOT_PRINT'),
                     key=lambda r: (r['date'], r['folder'].name), reverse=True)
@@ -272,6 +288,7 @@ def plan(root, success_days=7, failed_days=30, report_days=90, now=None,
         'bytes': total_image_bytes, 'reclaim_bytes': total_reclaim,
         'after_bytes': max(0, total_image_bytes-total_reclaim),
         'limit_bytes': total_image_limit,
+        'protected_reference_bytes': protected_reference_bytes,
         'files_to_remove': sum(e['category'] in image_categories for e in selected)
     }
     if total_image_bytes-total_reclaim > total_image_limit:
@@ -320,6 +337,8 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--run', action='store_true', help='Delete eligible owned files (default: preview)')
     p.add_argument('--results', type=Path, required=True)
+    p.add_argument('--reference-root', type=Path, default=DEFAULT_REFERENCE_ROOT,
+                   help='Protected nozzle reference library: count only, NEVER delete')
     p.add_argument('--success-days', type=int, default=7)
     p.add_argument('--failed-days', type=int, default=30)
     p.add_argument('--diagnostic-days', type=int, default=7)
