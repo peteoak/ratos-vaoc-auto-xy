@@ -143,10 +143,12 @@ class AutoXYGate:
         # Explicit opt-in: slicer printing temperatures MINUS each tool's own
         # configured reduction. No unapproved heating in standard RatOS mode.
         self.thermal_mode=config.get('thermal_mode','ratos').strip().lower()
-        if self.thermal_mode not in ('ratos','slicer_derived'):
-            raise config.error('thermal_mode must be ratos or slicer_derived')
+        if self.thermal_mode not in ('ratos','slicer_derived','fixed'):
+            raise config.error('thermal_mode must be ratos, slicer_derived or fixed')
         self.thermal_reductions=[config.getfloat('thermal_reduction_t0',50.,minval=20.,maxval=120.),
                                  config.getfloat('thermal_reduction_t1',50.,minval=20.,maxval=120.)]
+        self.thermal_fixed=[config.getfloat('thermal_fixed_t0',125.,minval=80.,maxval=150.),
+                            config.getfloat('thermal_fixed_t1',125.,minval=80.,maxval=150.)]
         self.thermal_band=config.getfloat('thermal_stability_band_c',2.,above=.5,maxval=5.)
         self.thermal_stable_seconds=config.getfloat('thermal_stable_seconds',5.,minval=3.,maxval=15.)
         self.thermal_wait_seconds=config.getfloat('thermal_wait_seconds',300.,minval=30.,maxval=600.)
@@ -213,6 +215,7 @@ class AutoXYGate:
         self.gcode.register_command('AUTO_XY_CAPTURE_MODE',self.cmd_AUTO_XY_CAPTURE_MODE,desc=self.cmd_AUTO_XY_CAPTURE_MODE_help)
         self.gcode.register_command('AUTO_XY_GATE',self.cmd_AUTO_XY_GATE,desc=self.cmd_AUTO_XY_GATE_help)
         self.gcode.register_command('AUTO_XY_HEALTH',self.cmd_AUTO_XY_HEALTH,desc=self.cmd_AUTO_XY_HEALTH_help)
+        self.gcode.register_command('AUTO_XY_THERMAL_SET',self.cmd_AUTO_XY_THERMAL_SET)
         self.gcode.register_command('AUTO_XY_RETRY_ONCE',self.cmd_AUTO_XY_RETRY_ONCE,desc=self.cmd_AUTO_XY_RETRY_ONCE_help)
         self.gcode.register_command('AUTO_XY_ENDURANCE_RUN',self.cmd_AUTO_XY_ENDURANCE_RUN,desc=self.cmd_AUTO_XY_ENDURANCE_RUN_help)
         # Protected pre-Beacon two-phase G-code-file flow.
@@ -478,10 +481,10 @@ class AutoXYGate:
         self.pending_toolshifts=toolshifts
         self._slicer_printing_temps=None
         self._slicer_camera_targets=None
-        if requested=='INDEPENDENT' and self.thermal_mode=='slicer_derived' and self.enabled():
+        if requested=='INDEPENDENT' and self.selected_thermal_mode()=='slicer_derived' and self.enabled():
             try:
                 printing,targets=slicer_nozzle_targets(
-                    gcmd.get('EXTRUDER_OTHER_LAYER_TEMP',''),self.thermal_reductions,
+                    gcmd.get('EXTRUDER_OTHER_LAYER_TEMP',''),self.selected_thermal_values('slicer_derived'),
                     self.max_camera_target_temp)
                 if max(targets)+self.thermal_band>self.max_camera_nozzle_temp:
                     raise ValueError('Measured-nozzle cap is below derived target plus stability band')
@@ -493,13 +496,88 @@ class AutoXYGate:
                 self.pending_print_mode=None
                 self.pending_toolshifts=None
                 raise gcmd.error('AUTO XY thermal setup: %s. Refusing print BEFORE heatsoak.'%exc)
+        if requested=='INDEPENDENT' and self.selected_thermal_mode()=='fixed' and self.enabled():
+            try:
+                targets=self.selected_thermal_values('fixed')
+                if max(targets)+self.thermal_band>self.max_camera_nozzle_temp:
+                    raise ValueError('Fixed camera target plus stability band exceeds measured cap')
+                if self.require_matched_camera_temps and abs(targets[0]-targets[1])>self.camera_temp_pair_tolerance:
+                    raise ValueError('Fixed independent targets conflict with matched temperature requirement')
+                self._slicer_camera_targets=list(targets)
+                self._slicer_printing_temps=[]
+            except (ValueError,GateAbort) as exc:
+                self.pending_print_mode=None
+                self.pending_toolshifts=None
+                raise gcmd.error('AUTO XY fixed camera thermal setup: %s'%exc)
         if requested=='INDEPENDENT' and self.reuse_enabled() and self.enabled() and not self.flag('auto_xy_v2_measure_only'):
             candidate,_=self._reuse_check(check_thermal=False)
             self.pending_reuse_candidate=candidate
             if candidate:
-                gcmd.respond_info('AUTO XY: prior verified calibration eligible for reuse; will recheck after heatsoak')
+                gcmd.respond_info('AUTO XY: previous alignment will NOT be reused for protected independent print')
         gcmd.respond_info('AUTO XY: START_PRINT captured %s; TOTAL_TOOLSHIFTS=%d%s' % (
             requested,toolshifts,' (single-tool bypass)' if requested=='SINGLE_TOOL' else ''))
+
+    def selected_thermal_mode(self):
+        """Persisted 0/1/2 selector; a missing key honours the existing config."""
+        raw=self.variables().get('auto_xy_v2_thermal_strategy',None)
+        if raw is None:
+            return self.thermal_mode
+        try:
+            code=float(raw)
+        except (ValueError, TypeError):
+            raise GateAbort('Invalid saved AutoXY temperature strategy')
+        if not math.isfinite(code) or code not in (0.,1.,2.):
+            raise GateAbort('Unexpected saved AutoXY temperature strategy')
+        return ('ratos','slicer_derived','fixed')[int(code)]
+
+    def selected_thermal_values(self,mode):
+        """Read independently configured temperatures without changing global limits."""
+        v=self.variables()
+        names=('auto_xy_v2_thermal_reduction_t0','auto_xy_v2_thermal_reduction_t1') if mode=='slicer_derived' else (
+            'auto_xy_v2_thermal_fixed_t0','auto_xy_v2_thermal_fixed_t1')
+        defaults=self.thermal_reductions if mode=='slicer_derived' else self.thermal_fixed
+        lower,upper=(20.,120.) if mode=='slicer_derived' else (80.,self.max_camera_target_temp)
+        result=[]
+        for name,default in zip(names,defaults):
+            try: value=float(v.get(name,default))
+            except (TypeError,ValueError):
+                raise GateAbort('Invalid saved thermal parameter '+name)
+            if not math.isfinite(value) or not lower<=value<=upper:
+                raise GateAbort('Saved thermal parameter out of safe range: '+name)
+            result.append(value)
+        return result
+
+    def cmd_AUTO_XY_THERMAL_SET(self,gcmd):
+        """Mainsail-only explicit thermal choice; never hot-switch during a print."""
+        if self.busy or self._protected_session or self.virtual_sd_active():
+            raise gcmd.error('AutoXY thermal strategy cannot change during an active/held print')
+        if str(self.sts('print_stats').get('state','')).lower() in ('printing','paused'):
+            raise gcmd.error('Cannot change AutoXY thermal strategy while print paused/active')
+        if self.sts('gcode_macro _VAOC').get('is_started'):
+            raise gcmd.error('Exit native VAOC before changing the thermal strategy')
+        mode=gcmd.get('MODE','').strip().lower()
+        if mode not in ('ratos','slicer_derived','fixed'):
+            raise gcmd.error('Thermal strategy must be RATOS, SLICER_DERIVED or FIXED')
+        if mode!='ratos':
+            defaults=self.selected_thermal_values(mode)
+            values=[]
+            for i in (0,1):
+                try: val=float(gcmd.get('T%d'%i,defaults[i]))
+                except (ValueError,TypeError):
+                    raise gcmd.error('T%d thermal parameter must be numeric'%i)
+                lo,hi=(20.,120.) if mode=='slicer_derived' else (80.,self.max_camera_target_temp)
+                if not math.isfinite(val) or not lo<=val<=hi:
+                    raise gcmd.error('T%d thermal parameter outside %.0f-%.0fC'%(i,lo,hi))
+                if mode=='fixed' and val+self.thermal_band>self.max_camera_nozzle_temp:
+                    raise gcmd.error('Fixed nozzle camera target plus stability band exceeds measured safety cap')
+                values.append(val)
+            tag='reduction' if mode=='slicer_derived' else 'fixed'
+            for i,value in enumerate(values):
+                self.run_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_thermal_%s_t%d VALUE=%.3f'%(tag,i,value))
+        self.run_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_thermal_strategy VALUE=%d'%(
+            ('ratos','slicer_derived','fixed').index(mode)))
+        gcmd.respond_info('AutoXY thermal strategy set to '+mode+
+                          '; all measured/target nozzle temperature caps remain enforced')
 
     def sts(self,name):
         obj=self.printer.lookup_object(name,None)
@@ -575,7 +653,7 @@ class AutoXYGate:
         Before VAOC, before busy/in-progress flags, and reversible even on a
         timeout. Only a true PRINT context with opt-in derived mode may enter.
         """
-        if self.thermal_mode!='slicer_derived' or self._slicer_camera_targets is None:
+        if self.selected_thermal_mode() not in ('slicer_derived','fixed') or self._slicer_camera_targets is None:
             raise gcmd.error('AUTO XY: missing slicer-derived preflight targets; refusing heater changes')
         targets=list(self._slicer_camera_targets)
         states=self.nozzle_states()
@@ -605,9 +683,9 @@ class AutoXYGate:
                     if stable_since is None:stable_since=now
                     if now-stable_since>=self.thermal_stable_seconds:
                         self._thermal_snapshot={
-                            'mode':'slicer_derived','print_temps':list(self._slicer_printing_temps),
+                            'mode':self.selected_thermal_mode(),'print_temps':list(self._slicer_printing_temps),
                             'camera_targets':list(targets),'measured':temps,
-                            'reduction':list(self.thermal_reductions),
+                            'reduction':list(self.selected_thermal_values('slicer_derived')) if self.selected_thermal_mode()=='slicer_derived' else None,
                             'stability_seconds':self.thermal_stable_seconds,
                             'stability_band_c':self.thermal_band,
                             'wait_seconds':round(now-start,2),
@@ -1825,7 +1903,7 @@ class AutoXYGate:
                     raise gcmd.error('AUTO XY: wrong START_PRINT phase; no calibration started')
             # Thermal waits are prerequisites, not alignment safety faults.
             # Only the explicitly enabled slicer-derived path issues M104.
-            if mode=='PRINT' and self.thermal_mode=='slicer_derived':
+            if mode=='PRINT' and self.selected_thermal_mode() in ('slicer_derived','fixed'):
                 self.start_slicer_thermal_preflight(gcmd)
             else:
                 self.wait_for_safe_camera_preflight(gcmd)
