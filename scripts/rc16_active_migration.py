@@ -15,7 +15,9 @@ RECOGNISED_CONTROLLERS = {
     BASELINE_SHA256: 'rc15-dev6-reference',
     OWNER_RC15_SHA256: 'rc15-dev6-owner-recovery-variant',
 }
-GATE_SECTION = re.compile(r'^\s*\[auto_xy_gate\]\s*
+GATE_SECTION = re.compile(r'^\s*\[auto_xy_gate\]\s*$')
+SECTION = re.compile(r'^\s*\[.*\]\s*$')
+PROTECTION = re.compile(r'^(\s*protected_print_enabled\s*:\s*)(True|False)(\s*)$')
 
 
 class MigrationError(RuntimeError):
