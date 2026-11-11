@@ -124,9 +124,8 @@ def _hough(gray, x, y, radius, param2=36, expected_center=None,
     if not circles:
         return None
     if len(circles) != 1:
-        raise ValueError('Ambiguous full-frame nozzle detection: %d plausible rim circles; '
-                         'inspect saved camera frames, nozzle wear and lighting. '
-                         'No circle was selected and no offset was changed.' % len(circles))
+        raise ValueError('Ambiguous camera ROI: %d nozzle-sized circles detected; '
+                         'commission a tighter image crop rather than guessing' % len(circles))
     return circles[0]
 
 
