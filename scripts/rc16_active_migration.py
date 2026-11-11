@@ -37,7 +37,7 @@ def preserve_enabled_gate(config_text):
     in_gate = False
     matches = []
     for i, line in enumerate(lines):
-        body = line.rstrip('\\r\\n')
+        body = line.splitlines()[0] if line else ''
         if SECTION.fullmatch(body):
             in_gate = bool(GATE_SECTION.fullmatch(body))
             if in_gate:
