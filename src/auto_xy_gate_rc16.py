@@ -803,7 +803,7 @@ class AutoXYGate:
         self.save_report()
         self.temp_guard_active=True
         gcmd.respond_info('AUTO XY: %s camera targets monitored (target cap %.1f C; measured cap %.1f C)' %
-                          (self.thermal_mode,self.max_camera_target_temp,self.max_camera_nozzle_temp))
+                          (self.selected_thermal_mode(),self.max_camera_target_temp,self.max_camera_nozzle_temp))
 
     def progress_stage(self,gcmd,stage,detail):
         """Best-effort human-readable status, without modifying motion or gate state.
