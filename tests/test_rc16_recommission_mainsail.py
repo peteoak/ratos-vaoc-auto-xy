@@ -92,6 +92,38 @@ class RecommissionControllerTests(unittest.TestCase):
         self.printer.vaoc = None
         self.assertFalse(self.coordinator.get_status(0)['ready'])
 
+    def test_begin_does_not_require_preexisting_home_before_native_vaoc_start(self):
+        # Motors are intentionally disabled at print end; native _VAOC_START
+        # performs its own homing after this entry command.
+        self.printer.get_state_message = lambda: ('Printer ready', 'ready')
+        class Status:
+            def __init__(self, mapping):
+                self.mapping = mapping
+            def get_status(self, now):
+                return self.mapping
+        self.printer.objects = {
+            'print_stats': Status({'state': 'complete'}),
+            'virtual_sdcard': Status({'is_active': False}),
+            'extruder': Status({'temperature': 24., 'target': 0.}),
+            'extruder1': Status({'temperature': 25., 'target': 0.}),
+            'toolhead': Status({'homed_axes': '', 'position': [0.,0.,0.]}),
+        }
+        class Gate:
+            busy = False
+            _endurance_active = False
+            _protected_session = None
+            max_camera_nozzle_temp = 155.
+            max_camera_target_temp = 150.
+        self.printer.objects['auto_xy_gate'] = Gate()
+        original_lookup = self.printer.lookup_object
+        self.printer.lookup_object = lambda name, default=None: (
+            self.printer.objects.get(name, original_lookup(name, default)))
+        self.printer.vaoc = Status({'is_started': False})
+        self.coordinator.cmd_begin(Command())
+        self.assertEqual(self.coordinator.phase, 'STARTING')
+        with self.assertRaisesRegex(RuntimeError, 'home XYZ'):
+            self.coordinator._preflight(require_vaoc=True)
+
     def test_begin_never_homes_or_opens_vaoc_in_python(self):
         with patch.object(self.coordinator, '_preflight', return_value=(1., 2., 3.)):
             self.coordinator.cmd_begin(Command())
