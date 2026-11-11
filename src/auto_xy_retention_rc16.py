@@ -13,6 +13,8 @@ import json
 import os
 import re
 import stat
+import subprocess
+import sys
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -370,6 +372,26 @@ def main():
         print('WARNING:', message)
     if opts.run:
         print('Removed files:', execute(opts.results, chosen))
+    # Invoke the independently fail-closed archived-reference retention worker
+    # on the SAME scheduled idle cleanup. Current images are never eligible.
+    refworker = Path(__file__).resolve().parent.parent / 'workers' / 'rc16_reference_retention.py'
+    if refworker.is_file() and not refworker.is_symlink():
+        command = [sys.executable, str(refworker),
+                   '--reference-root', str(opts.reference_root),
+                   '--active-profile', '/home/pi/auto_xy/camera_commission.json']
+        if opts.run:
+            command.append('--run')
+        try:
+            checked = subprocess.run(command, check=False, timeout=30,
+                                     capture_output=True, text=True)
+            if checked.returncode:
+                print('WARNING: Reference cleanup could not run; reference images preserved')
+            else:
+                print('Nozzle reference retention:', checked.stdout.strip()[:600])
+        except (OSError, subprocess.TimeoutExpired):
+            print('WARNING: Reference cleanup unavailable; references preserved')
+    else:
+        print('WARNING: Separate nozzle-reference cleanup worker missing; references preserved')
     return 0
 
 
