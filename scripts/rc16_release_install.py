@@ -120,6 +120,14 @@ def install_fresh(home, root, *, live,
                 rollback_fresh(home, prior, current, live=live)
                 if live:
                     restart()
+                    # A fresh installation can create persistent AutoXY
+                    # enable flags before its post-restart verification fails.
+                    # Roll them back after the original Klipper is restored,
+                    # otherwise the next fresh preflight sees stale state.
+                    active.post_gcode(
+                        'SAVE_VARIABLE VARIABLE=auto_xy_v2_enabled VALUE=0')
+                    active.post_gcode(
+                        'SAVE_VARIABLE VARIABLE=auto_xy_v2_measure_only VALUE=0')
             except BaseException as rollback_failure:
                 raise ReleaseInstallError(
                     'RC16 fresh install failed AND rollback could not complete. '
