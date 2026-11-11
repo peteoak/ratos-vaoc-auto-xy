@@ -202,11 +202,20 @@ def publish(session, frame_groups, camera_url, profile_path, backup_dir,
     token = uuid.uuid4().hex
     backup = archive / ('camera_commission_%s.json' % token) if before else None
     marker = archive / ('retired_%s.json' % token) if before else None
-    if backup:
-        atomic_exclusive(backup, before)
     data = (json.dumps(new_profile, sort_keys=True, indent=2) + '\n').encode()
     fd, temporary = tempfile.mkstemp(prefix='.rc16-profile-', dir=str(target.parent))
+    replaced = False
     try:
+        if backup:
+            # Both the exact prior profile and its retirement manifest must
+            # be safely written BEFORE the new profile can replace it.
+            atomic_exclusive(backup, before)
+            record = {'schema': 1, 'retired_at_unix': timestamp,
+                      'prior_profile_sha256': sha(before),
+                      'backup_profile': str(backup),
+                      'images': references(original)}
+            atomic_exclusive(marker,
+                             (json.dumps(record, sort_keys=True) + '\n').encode())
         with os.fdopen(fd, 'wb') as stream:
             stream.write(data)
             stream.flush()
@@ -214,17 +223,20 @@ def publish(session, frame_groups, camera_url, profile_path, backup_dir,
         require((target.read_bytes() if target.exists() else None) == before,
                 'Profile changed during preparation; no replacement attempted')
         os.replace(temporary, target)
+        replaced = True
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
-    if backup:
-        # Retire only old references. Their actual images remain in the
-        # reference library and are never under print-gate results.
-        record = {'schema': 1, 'retired_at_unix': timestamp,
-                  'prior_profile_sha256': sha(before),
-                  'backup_profile': str(backup),
-                  'images': references(original)}
-        atomic_exclusive(marker, (json.dumps(record, sort_keys=True) + '\n').encode())
+        if not replaced:
+            # No successful replacement => old reference clock never starts.
+            # A concurrent write is not touched; only the per-attempt
+            # unique archived files created above can be removed.
+            for new_file in (marker, backup):
+                if new_file is not None:
+                    try:
+                        new_file.unlink()
+                    except FileNotFoundError:
+                        pass
     return {'status': 'COMMITTED_FULL_FRAME_REFERENCES', 'profile': str(target),
             'backup': str(backup) if backup else None,
             'retired_manifest': str(marker) if marker else None}
