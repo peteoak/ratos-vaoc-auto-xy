@@ -141,6 +141,9 @@ def check_active_runtime(timeout=90, sleep=time.sleep):
                 enabled = saved.get('auto_xy_v2_enabled')
                 if str(enabled).strip().lower() not in ('1', '1.0', 'true'):
                     raise InstallationError('Persistent AutoXY calibration enable is OFF')
+                measure_only = saved.get('auto_xy_v2_measure_only', 0)
+                if str(measure_only).strip().lower() not in ('0', '0.0', 'false'):
+                    raise InstallationError('AutoXY measure-only mode remains enabled')
                 for key in ('auto_xy_v2_fault', 'auto_xy_v2_in_progress'):
                     if str(saved.get(key, 0)).strip().lower() not in ('0', '0.0', 'false'):
                         raise InstallationError('AutoXY has an unresolved safety fault: ' + key)
