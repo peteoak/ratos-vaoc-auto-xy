@@ -122,8 +122,8 @@ def main(argv=None):
             print('ROI INSPECTION FAILED (%s): %s' % (Path(name).name, exc),
                   file=sys.stderr, flush=True)
     print('Circle labels are diagnostics, NOT nozzle identification. '
-          'Human-confirm an ROI and rerun all commissioning images; '
-          'do not change saved offsets.', flush=True)
+          'Keep the full-frame ROI; inspect nozzle rim wear, focus and '
+          'lighting across all frames. Do not change saved offsets.', flush=True)
     return 2 if failed else 0
 
 
