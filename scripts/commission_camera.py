@@ -44,18 +44,7 @@ def create_profile(t0,t1,roi,camera_url,confirmed):
             digest=hashlib.sha256(path.read_bytes()).hexdigest()
             if digest in used:raise ValueError('Duplicate camera frame: '+str(path))
             used.add(digest)
-            try:
-                circle=detect(path,roi=v)
-            except ValueError as exc:
-                if ('Ambiguous camera ROI:' in str(exc) or
-                        'Ambiguous full-frame nozzle detection:' in str(exc)):
-                    raise ValueError(
-                        '%s image %s: %s. Keep the full camera frame; inspect '
-                        'all commissioning frames using scripts/inspect_camera_roi.py '
-                        'and check nozzle rim condition, focus and illumination. '
-                        'Do not select an unverified circle.' %
-                        (key, path.name, str(exc).split(';', 1)[0])) from exc
-                raise
+            circle=detect(path,roi=v)
             if not all(math.isfinite(float(x)) for x in circle):
                 raise ValueError('Nonfinite circle detection')
             circles.append(circle)
