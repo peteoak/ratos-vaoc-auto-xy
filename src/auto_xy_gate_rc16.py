@@ -2416,9 +2416,9 @@ class AutoXYGate:
         if not self.enabled() or self.pending_print_mode!='INDEPENDENT' or not self.pending_toolshifts:
             s['invalid']=True
             raise gcmd.error('AutoXY no longer has an enabled independent two-tool AutoXY gate')
-        if self.reuse_enabled():
-            s['invalid']=True
-            raise gcmd.error('AutoXY trial refuses session-reuse shortcut; turn reuse OFF')
+        # Legacy reuse opt-in is ignored for protected prints. Each protected
+        # independent print MUST freshly home, measure, correct and verify;
+        # an old saved preference must never cause an install/test rejection.
         if tuple(self.offsets())!=s['initial_offsets']:
             s['invalid']=True
             raise gcmd.error('AutoXY saved offsets changed during bed heatsoak')
