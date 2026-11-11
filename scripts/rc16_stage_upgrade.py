@@ -27,7 +27,7 @@ INCLUDE = '[include auto_xy_rc16.cfg]'
 RC15_INCLUDE = '[include auto_xy.cfg]'
 SOURCES = {
     'auto_xy/klipper/auto_xy_gate.py':
-        ('src/auto_xy_gate_rc16.py', '838e6bc492d816d45e0fb5e7543f022d7ae6964c'),
+        ('src/auto_xy_gate_rc16.py', '9a056ce66c2d892728fb3e289b3a6a09792c570d'),
     'auto_xy/vision/auto_xy_retention_rc16.py':
         ('src/auto_xy_retention_rc16.py', '4952971240a17c187a7a80a5f696d4d520ea5fdc'),
     'auto_xy/klipper/auto_xy_ratos_handoff_rc16.py':
@@ -44,6 +44,8 @@ SOURCES = {
         ('src/auto_xy_recommission_rc16.py', '2a45af36d18a3d0d78fb0c04307ab2ca9d4795cc'),
     'printer_data/config/auto_xy_recommission_rc16_macros.cfg':
         ('config/auto_xy_recommission_rc16_macros.cfg', '1898cb6a949b6a5f747829df819795b2543db571'),
+    'printer_data/config/auto_xy_thermal_rc16_macros.cfg':
+        ('config/auto_xy_thermal_rc16_macros.cfg', 'd4b8f0b46f57c0fa2e9f2e2d6d4c75a89bb0b62c'),
 }
 LINK = 'klipper/klippy/extras/auto_xy_ratos_handoff_rc16.py'
 LINK_RECOMMISSION = 'klipper/klippy/extras/auto_xy_recommission_rc16.py'
