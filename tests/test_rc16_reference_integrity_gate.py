@@ -59,6 +59,11 @@ class ActiveReferenceIntegrityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'duplicated'):
             self.gate._verify_nozzle_reference_library(self.profile)
 
+    def test_photo_matching_requires_uncropped_full_camera_frame(self):
+        source = (ROOT / 'src/auto_xy_gate_rc16.py').read_text()
+        self.assertIn("str(self.roi).strip().lower()!='auto'", source)
+        self.assertIn('photographic reference requires full camera frame', source)
+
     def test_legacy_profile_without_reference_schema_stays_compatible(self):
         legacy={'tool0':{'radius_px':140.},'tool1':{'radius_px':145.}}
         self.gate._verify_nozzle_reference_library(legacy)
