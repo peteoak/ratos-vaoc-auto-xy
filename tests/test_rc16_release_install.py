@@ -61,12 +61,14 @@ class ReleaseInstallTests(unittest.TestCase):
              patch.object(release.ratos_extension, 'snapshot', return_value={
                  'registered': str(self.home / release.upgrade.OLD_GATE),
                  'link': str(self.home / release.upgrade.OLD_GATE)}), \
-             patch.object(release.ratos_extension, 'unregister', return_value=None):
+             patch.object(release.ratos_extension, 'unregister', return_value=None), \
+             patch.object(release.active, 'post_gcode') as post:
             with self.assertRaisesRegex(release.ReleaseInstallError, 'previous state restored'):
                 release.install_fresh(
                     self.home, ROOT, live=True,
                     restart=restart, verify=lambda: None, activate=lambda: None)
         self.assertEqual(restarts, ['restart', 'restart'])
+        self.assertEqual(post.call_count, 2)
         self.assertEqual(self.printer.read_text(), self.before_printer)
         self.assertFalse((self.home / 'printer_data/config/auto_xy.cfg').exists())
         self.assertFalse((self.home / 'printer_data/config/auto_xy_rc16.cfg').exists())
@@ -105,7 +107,8 @@ class ReleaseInstallTests(unittest.TestCase):
              patch.object(release.ratos_extension, 'verify_absent', side_effect=absent), \
              patch.object(release.ratos_extension, 'register', side_effect=register), \
              patch.object(release.ratos_extension, 'snapshot', side_effect=snapshot), \
-             patch.object(release.ratos_extension, 'unregister', side_effect=unregister):
+             patch.object(release.ratos_extension, 'unregister', side_effect=unregister), \
+             patch.object(release.active, 'post_gcode') as post:
             with self.assertRaisesRegex(release.ReleaseInstallError, 'previous state restored'):
                 release.install_fresh(self.home, ROOT, live=True,
                                       restart=restart, activate=lambda: None)
@@ -113,6 +116,10 @@ class ReleaseInstallTests(unittest.TestCase):
         self.assertFalse(link.exists() or link.is_symlink())
         self.assertEqual(self.printer.read_text(), self.before_printer)
         self.assertEqual(starts, ['restart', 'restart'])
+        self.assertEqual(
+            [call.args[0] for call in post.call_args_list],
+            ['SAVE_VARIABLE VARIABLE=auto_xy_v2_enabled VALUE=0',
+             'SAVE_VARIABLE VARIABLE=auto_xy_v2_measure_only VALUE=0'])
 
     def test_unified_offline_upgrade_recognises_reviewed_baseline(self):
         baseline = release.baseline.plan(self.home, ROOT, 'fresh')
