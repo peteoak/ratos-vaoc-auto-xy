@@ -394,6 +394,43 @@ class AutoXYGate:
             logging.exception('Auto XY retention could not start; calibration continues unchanged')
         return eventtime+interval
 
+    def _verify_nozzle_reference_library(self,profile):
+        """Fail closed if an active RC16 reference disappears or changes.
+
+        This verifies the integrity of the stored photo evidence; it does NOT
+        pretend that photo matching against a live nozzle has been qualified.
+        Legacy RC15 profiles without reference_schema remain accepted.
+        """
+        if profile.get('reference_schema') is None:
+            return
+        if profile.get('reference_schema')!='rc16-full-frame-raw-jpeg-v1':
+            raise ValueError('Unknown nozzle reference image format')
+        import hashlib
+        root=os.path.realpath('/home/pi/auto_xy/nozzle_references')
+        observed=set()
+        for tool in ('tool0','tool1'):
+            photos=profile[tool].get('reference_images')
+            if not isinstance(photos,list) or len(photos)!=3:
+                raise ValueError('Incomplete active %s reference photographs'%tool)
+            for item in photos:
+                if not isinstance(item,dict):
+                    raise ValueError('Invalid nozzle reference metadata')
+                path=item.get('path')
+                checksum=item.get('sha256')
+                if not isinstance(path,str) or not isinstance(checksum,str) or len(checksum)!=64:
+                    raise ValueError('Incomplete reference photo integrity metadata')
+                resolved=os.path.realpath(path)
+                if (os.path.islink(path) or os.path.islink(os.path.dirname(path)) or
+                    not resolved.startswith(root+os.sep) or resolved in observed):
+                    raise ValueError('Unsafe or duplicated nozzle reference image')
+                observed.add(resolved)
+                with open(resolved,'rb') as stream:
+                    digest=hashlib.sha256(stream.read(12_000_001)).hexdigest()
+                if digest!=checksum:
+                    raise ValueError('Nozzle reference photo changed or exceeded size limit')
+        if len(observed)!=6:
+            raise ValueError('Expected six unique full-frame nozzle reference images')
+
     def ensure_commissioned(self,gcmd):
         """Early no-motion profile check; never equate image quality with VAOC physical alignment."""
         if not self.commission_required:return
@@ -414,6 +451,7 @@ class AutoXYGate:
                     if (not isinstance(center,(list,tuple)) or len(center)!=2 or
                             not all(math.isfinite(float(v)) for v in center)):
                         raise ValueError('First-use profile lacks local nozzle centre: '+tool)
+            self._verify_nozzle_reference_library(profile)
             self._commission_data=profile
         except (OSError,ValueError,KeyError,TypeError) as exc:
             raise gcmd.error('AUTO XY camera commissioning REQUIRED before automatic measurement: '+str(exc)+
