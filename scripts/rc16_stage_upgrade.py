@@ -27,7 +27,7 @@ INCLUDE = '[include auto_xy_rc16.cfg]'
 RC15_INCLUDE = '[include auto_xy.cfg]'
 SOURCES = {
     'auto_xy/klipper/auto_xy_gate.py':
-        ('src/auto_xy_gate_rc16.py', '9a056ce66c2d892728fb3e289b3a6a09792c570d'),
+        ('src/auto_xy_gate_rc16.py', '947b618371d6677471e72961be2ef04d24fabc8a'),
     'auto_xy/vision/auto_xy_retention_rc16.py':
         ('src/auto_xy_retention_rc16.py', '4952971240a17c187a7a80a5f696d4d520ea5fdc'),
     'auto_xy/klipper/auto_xy_ratos_handoff_rc16.py':
