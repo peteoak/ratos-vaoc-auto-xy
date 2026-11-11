@@ -15,7 +15,7 @@ from pathlib import Path
 
 RETAIN_DAYS = 30
 MANIFEST_PATTERN = re.compile(r'^retired_([a-f0-9]{32})[.]json$')
-FRAME_PATTERN = re.compile(r'^t[01]_[a-f0-9]{12}_[123][.]jpg
+FRAME_PATTERN = re.compile(r'^t[01]_[a-f0-9]{12}_[123][.]jpg$')
 IMAGE_SCHEMA = 'rc16-full-frame-raw-jpeg-v1'
 
 
