@@ -151,79 +151,63 @@ def clean(reference_root, active_profile, now=None, days=RETAIN_DAYS, execute=Fa
             'removed_images': removed_images, 'warnings': warnings}
 
 
-SESSION_PATTERN = re.compile(r'^session-[a-zA-Z0-9_-]{8,16}
-    cli = argparse.ArgumentParser(description=__doc__)
-    cli.add_argument('--reference-root', type=Path, required=True)
-    cli.add_argument('--active-profile', type=Path, required=True)
-    cli.add_argument('--run', action='store_true')
-    args = cli.parse_args()
-    result = clean(args.reference_root, args.active_profile, execute=args.run)
-    abandoned = clean_abandoned_sessions(
-        args.reference_root, args.active_profile, execute=args.run)
-    result['abandoned_capture_sessions'] = abandoned
-    print(json.dumps(result, sort_keys=True))
 
-
-if __name__ == '__main__':
-    main()
-)
+# Incomplete capture sessions are not protected references. A cancelled
+# session may be cleaned only after 30 idle days and only if NO current or
+# archived profile/retirement record references any of its images.
+SESSION_PATTERN = re.compile(r'^session-[a-zA-Z0-9_-]{8,16}$')
 
 
 def abandoned_sessions(reference_root, active_profile, now=None, days=30):
-    """Read-only candidates for old, entirely unreferenced Mainsail captures.
-
-    Conservative by design: if any active/archived profile is unreadable,
-    preserve ALL sessions. No current or historical reference is eligible.
-    """
     now = time.time() if now is None else float(now)
     if not math.isfinite(now) or days < 30:
-        raise ValueError('Unreferenced capture retention is at least 30 days')
+        raise ValueError('Abandoned image retention must be at least 30 days')
     root = Path(reference_root)
-    current = Path(active_profile)
+    active = Path(active_profile)
     archive = root / 'archived'
     if (root.is_symlink() or not root.is_dir() or archive.is_symlink()
-            or not archive.is_dir() or current.is_symlink()
-            or not current.is_file()):
-        return [], ['Reference library/profile missing; abandoned sessions preserved']
+            or not archive.is_dir() or active.is_symlink() or not active.is_file()):
+        return [], ['No safe reference library/profile; keeping abandoned sessions']
     root = root.resolve(strict=True)
     try:
-        active_bytes = current.read_bytes()
-        active_sha = hashlib.sha256(active_bytes).hexdigest()
+        active_bytes = active.read_bytes()
+        active_hash = hashlib.sha256(active_bytes).hexdigest()
         protected = {r['path'] for r in references(json.loads(active_bytes), True)}
-        for backup in archive.iterdir():
-            if backup.is_symlink() or not backup.is_file():
-                return [], ['Unknown archived entry; abandoned sessions preserved']
-            if backup.name.startswith('camera_commission_') and backup.suffix == '.json':
+        for record in archive.iterdir():
+            if record.is_symlink() or not record.is_file():
+                raise ValueError('Unexpected archive entry')
+            if record.name.startswith('camera_commission_') and record.suffix == '.json':
                 protected.update(r['path'] for r in references(
-                    json.loads(backup.read_text()), False))
-            elif backup.name.startswith('retired_') and backup.suffix == '.json':
-                manifest = json.loads(backup.read_text())
+                    json.loads(record.read_text()), False))
+            elif record.name.startswith('retired_') and record.suffix == '.json':
+                manifest = json.loads(record.read_text())
                 if not isinstance(manifest, dict) or not isinstance(manifest.get('images'), list):
-                    raise ValueError('Unknown retirement marker')
-                for entry in manifest['images']:
-                    if not isinstance(entry, dict) or not isinstance(entry.get('path'), str):
-                        raise ValueError('Bad retirement image reference')
-                    protected.add(entry['path'])
+                    raise ValueError('Invalid retirement manifest')
+                for row in manifest['images']:
+                    if not isinstance(row, dict) or not isinstance(row.get('path'), str):
+                        raise ValueError('Invalid image reference')
+                    protected.add(row['path'])
             else:
-                return [], ['Unknown archived file; abandoned sessions preserved']
+                raise ValueError('Unknown archived file')
     except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
-        return [], ['Cannot verify all references; abandoned sessions preserved: ' + str(exc)]
+        return [], ['Archive cannot be audited: preserving all captures: ' + str(exc)]
     selected = []
     for folder in sorted(root.iterdir()):
         if not SESSION_PATTERN.fullmatch(folder.name) or folder.is_symlink() or not folder.is_dir():
             continue
         try:
-            st = folder.stat()
-            if now-st.st_mtime < days*86400 or now < st.st_mtime:
+            info = folder.stat()
+            if now < info.st_mtime or now-info.st_mtime < days*86400:
                 continue
-            files = list(folder.iterdir())
+            photos = list(folder.iterdir())
             if any(p.is_symlink() or not p.is_file() or
                    not FRAME_PATTERN.fullmatch(p.name) or
-                   str(p) in protected for p in files):
+                   str(p) in protected for p in photos):
                 continue
-            hashes = [(p, digest(p)) for p in files]
-            selected.append({'folder': folder, 'files': hashes,
-                             'active_sha': active_sha, 'mtime_ns': st.st_mtime_ns})
+            selected.append({'folder': folder,
+                             'files': [(p, digest(p)) for p in photos],
+                             'mtime_ns': info.st_mtime_ns,
+                             'active_hash': active_hash})
         except (OSError, ValueError):
             continue
     return selected, []
@@ -233,35 +217,32 @@ def clean_abandoned_sessions(reference_root, active_profile, now=None,
                              days=30, execute=False):
     items, warnings = abandoned_sessions(reference_root, active_profile, now, days)
     deleted = 0
-    images = 0
+    deleted_images = 0
     if execute:
         for item in items:
             try:
-                # Re-list every prospective deletion after potential concurrent
-                # recommissioning or archive changes. Never follow symlinks.
-                fresh, notes = abandoned_sessions(reference_root, active_profile,
-                                                   now, days)
-                if notes or not any(
+                fresh, errors = abandoned_sessions(
+                    reference_root, active_profile, now, days)
+                if errors or not any(
                     x['folder'] == item['folder'] and
-                    x['active_sha'] == item['active_sha'] and
+                    x['active_hash'] == item['active_hash'] and
                     x['mtime_ns'] == item['mtime_ns'] and
                     x['files'] == item['files'] for x in fresh):
                     continue
-                for path, expected in item['files']:
-                    if digest(active_profile) != item['active_sha'] or (
-                            path.is_symlink() or not path.is_file() or
-                            digest(path) != expected):
-                        raise ValueError('Capture changed; preserving remainder')
-                    path.unlink()
-                    images += 1
-                if item['folder'].is_symlink():
-                    raise ValueError('Capture directory changed')
+                for photo, checksum in item['files']:
+                    if (digest(active_profile) != item['active_hash'] or
+                            photo.is_symlink() or not photo.is_file()
+                            or digest(photo) != checksum):
+                        raise ValueError('Image changed during cleanup')
+                    photo.unlink()
+                    deleted_images += 1
                 item['folder'].rmdir()
                 deleted += 1
             except (OSError, ValueError) as exc:
-                warnings.append('Abandoned capture preserved after change: ' + str(exc))
+                warnings.append('Old capture retained: ' + str(exc))
     return {'eligible_sessions': len(items), 'removed_sessions': deleted,
-            'removed_images': images, 'warnings': warnings}
+            'removed_images': deleted_images, 'warnings': warnings}
+
 
 
 def main():
@@ -271,6 +252,8 @@ def main():
     cli.add_argument('--run', action='store_true')
     args = cli.parse_args()
     result = clean(args.reference_root, args.active_profile, execute=args.run)
+    result['abandoned_capture_sessions'] = clean_abandoned_sessions(
+        args.reference_root, args.active_profile, execute=args.run)
     print(json.dumps(result, sort_keys=True))
 
 
