@@ -33,9 +33,9 @@ class NozzleReferenceLifecycleTests(unittest.TestCase):
         self.results.mkdir()
         self.archive = self.root / 'archived'
         self.archive.mkdir()
-        self.old_session = self.root / 'session-old'
+        self.old_session = self.root / 'session-aaaaaaaa'
         self.old_session.mkdir()
-        self.new_session = self.root / 'session-new'
+        self.new_session = self.root / 'session-bbbbbbbb'
         self.new_session.mkdir()
         self.profile = base / 'camera_commission.json'
         self.old_images = self.make_frames(self.old_session, 'abcabcabcabc')
@@ -161,7 +161,7 @@ class NozzleReferenceLifecycleTests(unittest.TestCase):
     def test_abandoned_session_cleanup_requires_thirty_days_and_no_references(self):
         now = 1_800_000_000
         self.publish(now=now - 50*86400)
-        orphan = self.root / 'session-abcdefgh'
+        orphan = self.root / 'session-cccccccc'
         orphan.mkdir()
         photo = orphan / 't0_abcdefabcdef_1.jpg'
         photo.write_bytes(b'old unreferenced image')
@@ -193,7 +193,7 @@ class NozzleReferenceLifecycleTests(unittest.TestCase):
     def test_corrupt_archive_blocks_abandoned_capture_deletion(self):
         now = 1_800_000_000
         self.publish(now=now-50*86400)
-        orphan = self.root / 'session-abcdefgh'
+        orphan = self.root / 'session-cccccccc'
         orphan.mkdir()
         photo = orphan / 't0_abcdefabcdef_1.jpg'
         photo.write_bytes(b'unreferenced')
