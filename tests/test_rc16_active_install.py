@@ -113,7 +113,7 @@ class ActiveInstallerTests(unittest.TestCase):
             'auto_xy_gate': {'protected_print_enabled': True},
             'auto_xy_ratos_handoff_rc16': {
                 'enabled': True, 'retention_enabled': True},
-            'gcode_macro auto_xy_recommission_nozzles': {}}
+            'gcode_macro AUTO_XY_RECOMMISSION_NOZZLES': {}}
         def response(url):
             if url == installer.INFO_URL:
                 return {'result': {'state': 'ready'}}
