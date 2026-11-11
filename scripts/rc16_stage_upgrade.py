@@ -41,7 +41,7 @@ SOURCES = {
     'auto_xy/workers/rc16_reference_retention.py':
         ('src/tools/rc16_reference_retention.py', 'dbac2708a1e13a53b2eee7caded910fc8f69427d'),
     'auto_xy/klipper/auto_xy_recommission_rc16.py':
-        ('src/auto_xy_recommission_rc16.py', '2a45af36d18a3d0d78fb0c04307ab2ca9d4795cc'),
+        ('src/auto_xy_recommission_rc16.py', '6786707ffdbb84fabef2ddcaec7a43cb629db322'),
     'printer_data/config/auto_xy_recommission_rc16_macros.cfg':
         ('config/auto_xy_recommission_rc16_macros.cfg', '1898cb6a949b6a5f747829df819795b2543db571'),
     'printer_data/config/auto_xy_thermal_rc16_macros.cfg':
