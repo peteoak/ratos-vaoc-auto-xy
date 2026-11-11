@@ -94,7 +94,7 @@ def add_include(text):
     head, tail = ((text[:save.start()], text[save.start():]) if save
                   else (text, ''))
     prefix = head.rstrip('\r\n')
-    return prefix + '\n\n# AutoXY RC16 protected handoff (OFF until qualified)\n' + INCLUDE + '\n\n' + tail
+    return prefix + '\n\n# AutoXY RC16 native protected print handoff\n' + INCLUDE + '\n\n' + tail
 
 
 def no_symlink_parents(home, rel):
@@ -295,7 +295,7 @@ def restore(home, folder, manifest, require_installed=True):
 def stage(home, changes):
     folder, manifest = snapshot(home, changes)
     try:
-        # printer.cfg is LAST. The included RC16 section stays disabled.
+        # printer.cfg is LAST; activation follows the supplied transaction profile.
         order = [key for key in changes if key != PRINTER] + [PRINTER]
         for rel in order:
             data = changes[rel]
