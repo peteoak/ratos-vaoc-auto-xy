@@ -31,8 +31,8 @@ Capture uses the **complete camera frame** (ROI auto). The existing production t
 
 ## Known limitations (must not be concealed)
 
-1. New full-frame reference JPEGs are **saved for future visual matching**, but RC16's production detector currently uses numerical centre/radius profiles rather than photo-template comparisons.
-2. The initial legacy full-frame circle identification can still fail on two plausible reflections, including the beta tester's reported condition. That refusal is intentional until reference-based disambiguation is validated on original unannotated frames.
+1. RC16 now derives an independent compact radial appearance signature from each tool's three reference JPEGs and checks it alongside the tuned Hough `two_stage_roi` geometry on later captures. This is not full photograph-to-photograph template matching. Original unannotated nozzle images and Pi 4 hardware tests must validate thresholds and false rejections.
+2. A conservative manually positioned VAOC full-frame reticle/contrast fallback exists for multiple commissioning circles. It refuses uncertain selections. The beta tester's original unannotated images, unusually worn nozzles and alternate camera reticles are not yet hardware-qualified.
 3. The Mainsail sequence has not yet been proven against actual printer homing, _VAOC native state, USB camera, offset preservation and service restarts. Do not treat green offline CI as live qualification.
 4. Camera positioning is still a manual VAOC decision. Image-centre repeatability does not by itself prove the physical extrusion-axis centre on an asymmetrically worn nozzle.
 
@@ -42,6 +42,9 @@ Capture uses the **complete camera frame** (ROI auto). The existing production t
 - `src/auto_xy_recommission_rc16.py`
 - `src/tools/rc16_recommission_worker.py`
 - `src/tools/rc16_reference_retention.py`
+- `src/auto_xy_commission_candidates_rc16.py`
+- `src/auto_xy_reference_signature_rc16.py`
+- `src/auto_xy_vision_worker_rc16.py`
 - `src/auto_xy_retention_rc16.py`
 - `scripts/rc16_active_migration.py`
 - `scripts/rc16_stage_upgrade.py`
