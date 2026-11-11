@@ -141,7 +141,9 @@ def check_active_runtime(timeout=90, sleep=time.sleep):
                 recommission = status.get('auto_xy_recommission_rc16', {})
                 if recommission.get('ready') is not True:
                     raise InstallationError('RC16 Mainsail nozzle recommissioning is not ready')
-                if 'gcode_macro auto_xy_recommission_nozzles' not in sections:
+                if not any(str(name).casefold() ==
+                           'gcode_macro auto_xy_recommission_nozzles'
+                           for name in sections):
                     raise InstallationError('RC16 Recommission Nozzles Mainsail macro is missing')
                 # The config flags alone do not enable AutoXY. The controller
                 # also reads its persistent SAVE_VARIABLE state on each run.
