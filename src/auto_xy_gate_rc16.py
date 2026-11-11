@@ -473,9 +473,11 @@ class AutoXYGate:
                     session.get('phase')!='PREPARING'):
                     raise gcmd.error(
                         'AutoXY: unprotected two-tool G-code refused before bed heat. '
-                        'Convert the original slicer file using '
-                        'src/tools/convert_two_tool_print.py. '
-                        'No calibration was started; original file was not made resumable.')
+                        'This file did not pass the RC16 native print-file processor. '
+                        'Start the original file normally from Mainsail after '
+                        'checking that the RC16 protected handoff is armed; '
+                        'no slicer postprocessor is needed. '
+                        'No calibration started or original file released.')
             self.ensure_commissioned(gcmd)
         self.pending_print_mode=requested
         self.pending_toolshifts=toolshifts
