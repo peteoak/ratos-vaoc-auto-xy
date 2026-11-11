@@ -210,6 +210,43 @@ class ActiveInstallerTests(unittest.TestCase):
                 installer.activate_persistent_gate()
             self.assertEqual(send.call_count, 1)
 
+    def test_activation_clears_saved_measure_only_even_if_already_enabled(self):
+        status = {
+            'configfile': {'settings': {
+                'auto_xy_gate': {'protected_print_enabled': True},
+                'auto_xy_ratos_handoff_rc16': {'enabled': True}}},
+            'auto_xy_ratos_handoff_rc16': {
+                'armed': True, 'sd_api_guarded': True,
+                'resume_api_guarded': True}}
+        def response(url):
+            return ({'result': {'state': 'ready'}} if url == installer.INFO_URL
+                    else {'result': {'status': status}})
+        with patch.object(installer, 'query_json', side_effect=response), \
+             patch.object(installer, 'saved_state', return_value=(True, True)), \
+             patch.object(installer, 'post_gcode') as send:
+            self.real_activate()
+            send.assert_called_once_with('AUTO_XY_ON')
+
+    def test_runtime_rejects_measure_only_when_correction_required(self):
+        status = {
+            'configfile': {'settings': {
+                'auto_xy_gate': {'protected_print_enabled': True},
+                'auto_xy_ratos_handoff_rc16': {
+                    'enabled': True, 'retention_enabled': True}}},
+            'auto_xy_ratos_handoff_rc16': {
+                'armed': True, 'sd_api_guarded': True,
+                'resume_api_guarded': True},
+            'save_variables': {'variables': {
+                'auto_xy_v2_enabled': 1, 'auto_xy_v2_measure_only': 1,
+                'auto_xy_v2_fault': 0, 'auto_xy_v2_in_progress': 0}}}
+        def response(url):
+            return ({'result': {'state': 'ready'}} if url == installer.INFO_URL
+                    else {'result': {'status': status}})
+        with patch.object(installer, 'query_json', side_effect=response):
+            with self.assertRaisesRegex(installer.InstallationError,
+                                        'measure-only mode remains enabled'):
+                installer.check_active_runtime(timeout=2, sleep=lambda _: None)
+
     def test_rollback_restores_original_disabled_flags(self):
         def restore(original):
             self.assertEqual(original, (False, True))
