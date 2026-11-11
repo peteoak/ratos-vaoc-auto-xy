@@ -62,7 +62,9 @@ class NozzleRecommission:
             'positioned_tool': self.current_tool,
             'last_error': self.last_error,
             'ready': (self.worker.is_file() and not self.worker.is_symlink()
-                      and Path(self.python).is_file()),
+                      and Path(self.python).is_file()
+                      and self.printer.lookup_object('gcode_macro _VAOC', None)
+                      is not None),
         }
 
     def _notice(self, text):
@@ -206,6 +208,8 @@ class NozzleRecommission:
         self.captured_position = None if operation != 'CAPTURE' else self.captured_position
         try:
             out, err = proc.communicate(timeout=.1)
+            if self.phase == 'INTERRUPTED':
+                raise ValueError('Motor-off, rehome or restart invalidated recommissioning')
             if proc.returncode != 0:
                 raise ValueError(err.decode('utf-8', 'replace')[:350].strip()
                                  or 'camera worker failed')
