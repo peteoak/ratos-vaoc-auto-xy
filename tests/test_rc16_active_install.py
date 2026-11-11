@@ -261,6 +261,22 @@ class ActiveInstallerTests(unittest.TestCase):
             restored.assert_called_once_with((False, True))
         self.assert_restored()
 
+    def test_preinstall_saved_state_does_not_query_uninstalled_rc16_handoff(self):
+        observed = []
+        def response(url):
+            observed.append(url)
+            self.assertEqual(url, installer.SAVED_URL)
+            self.assertNotIn('auto_xy_ratos_handoff_rc16', url)
+            return {'result': {'status': {'save_variables': {'variables': {
+                'auto_xy_v2_enabled': 1,
+                'auto_xy_v2_measure_only': 0,
+                'auto_xy_v2_fault': 0,
+                'auto_xy_v2_in_progress': 0,
+                'auto_xy_v2_retry_available': 0}}}}}
+        with patch.object(installer, 'query_json', side_effect=response):
+            self.assertEqual(self.real_saved_state(), (True, False))
+        self.assertEqual(observed, [installer.SAVED_URL])
+
     def test_saved_state_refuses_unresolved_faults(self):
         status = {'save_variables': {'variables': {
             'auto_xy_v2_enabled': 0, 'auto_xy_v2_fault': 1,
