@@ -37,7 +37,7 @@ SOURCES = {
     'auto_xy/workers/rc16_generated_retention.py':
         ('src/tools/rc16_generated_retention.py', '300d82cd49a45fb365dd8dbb0b6ee6f1634b9a14'),
     'auto_xy/vision/auto_xy_commission_candidates_rc16.py':
-        ('src/auto_xy_commission_candidates_rc16.py', '4fcfdfebeb218351634e3c156eef87baa296d706'),
+        ('src/auto_xy_commission_candidates_rc16.py', '27028efe316511ddce869685491b8228005e20ce'),
     'auto_xy/workers/rc16_recommission_worker.py':
         ('src/tools/rc16_recommission_worker.py', 'd9438ab73a6d79f06b7da48c01c21d8c866fc142'),
     'auto_xy/workers/rc16_reference_retention.py':
