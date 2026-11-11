@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""RC16 single-command ACTIVE installer for fresh RatOS and reviewed RC15.
+
+One user-visible transaction, no staging toggle and no slicer modifications.
+The existing signed RC15 installer supplies verified shared files and RatOS
+extension registration during a fresh install. Klipper is restarted ONLY
+after every RC16 active file has been installed.
+
+Use only after completing the supervised release-candidate code audit.
+"""
+import argparse
+import contextlib
+import fcntl
+import json
+import os
+import sys
+from pathlib import Path
+
+import install_autoxy as baseline
+import ratos_extension
+import rc16_active_install as active
+import rc16_stage_upgrade as upgrade
+
+HOME = Path('/home/pi')
+LOCK = Path('/tmp/autoxy-rc16-install.lock')
+RECEIPT = 'rc16-active-fresh-receipt.json'
+
+
+class ReleaseInstallError(RuntimeError):
+    pass
+
+
+def install_kind(home):
+    """Fail closed for partial/unknown installations, never silently reinstall."""
+    config = home / 'printer_data/config/auto_xy.cfg'
+    gate = home / 'auto_xy/klipper/auto_xy_gate.py'
+    if config.exists() or config.is_symlink() or gate.exists() or gate.is_symlink():
+        if not config.is_file() or not gate.is_file():
+            raise ReleaseInstallError('Incomplete AutoXY detected; inspect rather than overwrite')
+        return 'upgrade'
+    return 'fresh'
+
+
+def preflight(home, root, *, live):
+    kind = install_kind(home)
+    if kind == 'fresh':
+        # No intermediate disabled installation is presented to the operator.
+        # The BASELINE preparation and RC16 conversion happen before restart.
+        upgrade.verify_sources(root)
+        baseline_files = baseline.plan(home, root, 'fresh')
+        offsets = baseline.live_safe(home, 'fresh') if live else None
+        return kind, baseline_files, offsets
+    variant, changes = upgrade.check_active_installation(home, root, live=live)
+    return kind, (variant, changes), None
+
+
+def rollback_fresh(home, baseline_snapshot, rc16_snapshot, *, live):
+    """Restore exact original bytes and unregister only our own RatOS extension."""
+    if rc16_snapshot is not None:
+        upgrade.rollback(home, rc16_snapshot, live=False)
+    if live:
+        expected = str(home / upgrade.OLD_GATE)
+        state = ratos_extension.snapshot(home)
+        if state['registered'] != expected or state['link'] != expected:
+            raise ReleaseInstallError('RatOS registration differs; manual recovery required')
+        ratos_extension.unregister(home, expected, expected)
+    # No live-safe requirement here: a failed Klipper startup is precisely
+    # why this rollback may be needed. The manifests verify installed files.
+    baseline.rollback(home, baseline_snapshot, live=False)
+
+
+def install_fresh(home, root, *, live,
+                  restart=active.restart_klipper,
+                  verify=active.check_active_runtime,
+                  activate=None):
+    """Single active install with two exact snapshots and automatic rollback."""
+    kind, changes, offsets = preflight(home, root, live=live)
+    if kind != 'fresh':
+        raise ReleaseInstallError('Fresh installer cannot overwrite an existing AutoXY')
+    prior = None
+    current = None
+    try:
+        prior = baseline.install(home, changes, 'fresh', offsets)
+        # Already reviewed RC15 layout + registration, no Klipper restart
+        # and no off-stage of the final RC16 operating configuration.
+        _, prepared = upgrade.check_active_installation(home, root, live=False)
+        current = upgrade.stage(home, prepared)
+        # Persist receipt inside the exact RC16 rollback snapshot.
+        receipt = {'schema': 1, 'mode': 'fresh-active', 'home': str(home),
+                   'rc15_snapshot': str(prior), 'rc16_snapshot': str(current),
+                   'version': upgrade.VERSION}
+        with (current / RECEIPT).open('x', encoding='utf-8') as stream:
+            json.dump(receipt, stream, indent=2, sort_keys=True)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if live:
+            restart()
+            # Fresh commissioning is required before real nozzle correction,
+            # but protection is ACTIVE; no disabled or measure-only stage.
+            if activate is None:
+                active.activate_persistent_gate(fresh=True)
+            else:
+                activate()
+            verify()
+        return current
+    except BaseException as failure:
+        if prior is not None:
+            try:
+                rollback_fresh(home, prior, current, live=live)
+                if live:
+                    restart()
+            except BaseException as rollback_failure:
+                raise ReleaseInstallError(
+                    'RC16 fresh install failed AND rollback could not complete. '
+                    'Do not start a print. Snapshots: %s / %s; errors: %s / %s'
+                    % (prior, current, failure, rollback_failure)) from rollback_failure
+        raise ReleaseInstallError(
+            'RC16 fresh install refused or failed; previous state restored: %s'
+            % failure) from failure
+
+
+def install_complete(home, root, *, live,
+                     restart=active.restart_klipper,
+                     verify=active.check_active_runtime,
+                     activate=None):
+    """One entry point for a first install or a recognised RC15 migration."""
+    kind = install_kind(home)
+    if kind == 'fresh':
+        receipt = install_fresh(home, root, live=live,
+                                restart=restart, verify=verify,
+                                activate=activate)
+        return 'fresh-active', receipt
+    variant, changes, _ = preflight(home, root, live=live)
+    # Reuse the already-tested active upgrade with a single restart,
+    # saved state preservation and automatic rollback.
+    if live:
+        return active.install(home, root, live=True,
+                              restart=restart, verify=verify)
+    receipt = upgrade.stage(home, changes[1] if isinstance(changes, tuple) else changes)
+    return variant, receipt
+
+
+@contextlib.contextmanager
+def one_installer_only():
+    with LOCK.open('a+') as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ReleaseInstallError('Another AutoXY installation is running') from exc
+        yield
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument('action', choices=('check', 'install'))
+    ap.add_argument('--home', type=Path, default=HOME, help=argparse.SUPPRESS)
+    ap.add_argument('--offline', action='store_true', help=argparse.SUPPRESS)
+    opts = ap.parse_args(argv)
+    home = opts.home.absolute()
+    root = Path(__file__).resolve().parents[1]
+    try:
+        if opts.offline:
+            upgrade.require(home != HOME, 'Offline testing cannot target live printer')
+        else:
+            upgrade.require(home == HOME, 'Real installs only support canonical /home/pi')
+        with one_installer_only():
+            if opts.action == 'check':
+                kind, _, _ = preflight(home, root, live=not opts.offline)
+                print('RC16 full active installation readiness: PASS (%s); no file changes' % kind)
+                return 0
+            kind, receipt = install_complete(home, root, live=not opts.offline)
+            print('RC16 single-transaction active installation COMPLETE:', kind)
+            print('Rollback snapshot:', receipt)
+            print('Protected print processor and Mainsail recommissioning loaded.')
+            print('A previously uncommissioned camera requires manual native VAOC '
+                  'nozzle commissioning before protected print correction.')
+            return 0
+    except (OSError, RuntimeError, ValueError, KeyError) as exc:
+        print('RC16 INSTALL FAILED OR REFUSED:', str(exc), file=sys.stderr)
+        return 2
+
+
+if __name__ == '__main__':
+    sys.exit(main())
