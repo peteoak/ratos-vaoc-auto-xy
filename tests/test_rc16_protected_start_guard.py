@@ -34,6 +34,13 @@ class ProtectedStartGuardTests(unittest.TestCase):
         self.assertIn("session.get('phase')!='PREPARING'", capture)
         self.assertIn('unprotected two-tool G-code refused before bed heat', capture)
 
+    def test_protected_independent_print_cannot_reuse_prior_alignment(self):
+        body = self.body('cmd_AUTO_XY_GATE')
+        self.assertIn("if (not self.protected_print_enabled and", body)
+        self.assertLess(body.index('not self.protected_print_enabled and'),
+                        body.index('reuse_candidate and self.reuse_enabled()'))
+        self.assertIn('ALWAYS get a fresh', body)
+
     def test_protected_gate_still_rejects_unconverted_idex(self):
         gate = self.body('cmd_AUTO_XY_GATE')
         self.assertIn('self.protected_print_enabled and not self._protected_inside_gate', gate)
