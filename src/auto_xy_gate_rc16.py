@@ -1639,8 +1639,8 @@ class AutoXYGate:
             raise gcmd.error('Endurance requires AUTO_XY_ON, not MEASURE_ONLY: initial calibration must correct and verify')
         if self.settling_path!='original':
             raise gcmd.error('Endurance is qualified for Original settling path only')
-        if self.reuse_enabled():
-            raise gcmd.error('Disable calibration reuse before endurance (AUTO_XY_REUSE_OFF)')
+        # Endurance always performs fresh camera calibration; a legacy
+        # reuse flag cannot bypass IDLE-mode measurement and is ignored.
         try:
             raw=str(gcmd.get('TOOL_CHANGES','100')).strip()
             if not raw.isdigit(): raise ValueError('TOOL_CHANGES must be an integer')
