@@ -54,7 +54,7 @@ def create_profile(t0,t1,roi,camera_url,confirmed):
                         'all commissioning frames using scripts/inspect_camera_roi.py '
                         'and check nozzle rim condition, focus and illumination. '
                         'Do not select an unverified circle.' %
-                        (key, path.name, exc)) from exc
+                        (key, path.name, str(exc).split(';', 1)[0])) from exc
                 raise
             if not all(math.isfinite(float(x)) for x in circle):
                 raise ValueError('Nonfinite circle detection')
