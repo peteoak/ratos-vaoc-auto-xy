@@ -991,6 +991,9 @@ class AutoXYGate:
                 if appearance is not None:
                     if self.camera_detector_mode!='two_stage_roi':
                         raise GateAbort('RC16 photo reference requires two_stage_roi')
+                    if str(self.roi).strip().lower()!='auto':
+                        raise GateAbort(
+                            'RC16 photographic reference requires full camera frame (camera_roi: auto)')
                     cmd.extend(['--expected-signature',
                                 json.dumps(appearance,allow_nan=False,
                                            separators=(',',':'))])
