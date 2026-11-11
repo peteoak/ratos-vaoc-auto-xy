@@ -215,7 +215,12 @@ class NozzleRecommission:
         try:
             out, err = proc.communicate(timeout=.1)
             if self.phase == 'INTERRUPTED':
-                raise ValueError('Motor-off, rehome or restart invalidated recommissioning')
+                if operation == 'PUBLISH':
+                    raise ValueError(
+                        'Motor-off/rehome interrupted publishing. New profile '
+                        'may already have committed atomically; inspect current '
+                        'profile and archive before attempting recommission again')
+                raise ValueError('Motor-off/rehome invalidated captured nozzle positions')
             if proc.returncode != 0:
                 raise ValueError(err.decode('utf-8', 'replace')[:350].strip()
                                  or 'camera worker failed')
@@ -246,7 +251,7 @@ class NozzleRecommission:
             self.last_error = str(exc)
             self.phase = 'ERROR'
             self._notice('FAILED: ' + self.last_error +
-                         '. Old profile remains available; inspect before retrying')
+                         '. Inspect current commissioning profile before retrying')
         return getattr(self.reactor, 'NEVER', float('inf'))
 
     def cmd_begin(self, gcmd):
