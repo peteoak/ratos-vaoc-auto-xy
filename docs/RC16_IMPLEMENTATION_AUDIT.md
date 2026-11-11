@@ -37,7 +37,7 @@ Status key: **CODE** = implemented and covered by automated tests; **PARTIAL** =
 | Do not reload T0 unnecessarily immediately after native _VAOC_START | **CODE/HARDWARE** | Mainsail T0 macro skips a second load at initial STARTING phase; hardware confirmation outstanding. |
 | Reference frames used by active profile never removed by ordinary storage cleanup | **CODE** | `src/auto_xy_retention_rc16.py`, protected reference library outside run tree, independently tested. |
 | Previous references: 30 days from successful replacement, then automatic deletion; failed replacements preserve old references | **CODE** | Retirement record, separate idle cleanup worker `src/tools/rc16_reference_retention.py`, integrity checks and interrupted-cleanup replay tests. |
-| Aborted/unpublished capture sessions should never accumulate indefinitely | **MISSING** | Current reference cleaner only deletes successful superseded generations; incomplete session JPEGs are protected but have no automatic expiry. A safe abandoned-session policy is still needed. |
+| Aborted/unpublished capture sessions should never accumulate indefinitely | **CODE** | Separate idle cleaner now expires only trusted, unreferenced abandoned session JPEGs after 30 days, with active/archive verification and fail-closed unknown-file handling. |
 | Soft combined image target (currently 512 MiB), allow captures to exceed, opportunistic idle reclamation | **CODE** | Image retention planner counts protected references; deletes only eligible old run images, not current references. |
 | Successful/failed/diagnostic image and report caps; reports not kept indefinitely | **CODE** | Per-category limits plus age limits in retention; active scheduled cleanup. |
 | Generated protected G-code automatically cleaned without deleting a selected/paused/printing file | **CODE/HARDWARE** | `src/tools/rc16_generated_retention.py` and coordinator registry/lock. Needs live test. |
@@ -54,7 +54,7 @@ Status key: **CODE** = implemented and covered by automated tests; **PARTIAL** =
 4. **Thermal, motor, Beacon and saved-offset behaviour:** Need a supervised positive and failed independent IDEX print, followed by another print after motors disable.
 5. **Installer qualification:** Actual restart, rollback and unknown beta-variant migration not demonstrated. No active-only fresh installer yet.
 6. **Optional requested temperature strategy UI:** Dropdown/fixed strategy not implemented; distinguish from existing working RatOS and slicer-derived modes.
-7. **Unpublished image cleanup:** Abandoned nozzle-reference sessions have no verified safe expiry path.
+7. **Automatic orphan cleanup:** New 30-day abandoned-session safety rule has offline tests, but runtime scheduling and interaction with real Mainsail sessions are not yet printer-qualified.
 
 ## Test limitations
 
