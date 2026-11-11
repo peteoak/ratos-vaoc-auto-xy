@@ -29,13 +29,17 @@ SOURCES = {
     'auto_xy/klipper/auto_xy_gate.py':
         ('src/auto_xy_gate_rc16.py', '838e6bc492d816d45e0fb5e7543f022d7ae6964c'),
     'auto_xy/vision/auto_xy_retention_rc16.py':
-        ('src/auto_xy_retention_rc16.py', 'fa5127f19bc7be1adf20ed93c92a831e240e8413'),
+        ('src/auto_xy_retention_rc16.py', '4952971240a17c187a7a80a5f696d4d520ea5fdc'),
     'auto_xy/klipper/auto_xy_ratos_handoff_rc16.py':
         ('src/auto_xy_ratos_handoff_rc16.py', 'ea3ce0355639250aeceeaa49e7d6097066ae7141'),
     'auto_xy/workers/rc16_prepare_worker.py':
         ('src/tools/rc16_prepare_worker.py', '32852157d0e2cf3e2d1133bbfe2bad8720fa1f73'),
     'auto_xy/workers/rc16_generated_retention.py':
         ('src/tools/rc16_generated_retention.py', '300d82cd49a45fb365dd8dbb0b6ee6f1634b9a14'),
+    'auto_xy/workers/rc16_recommission_worker.py':
+        ('src/tools/rc16_recommission_worker.py', '818b6d8ac3f22c1e015f7759bd2a11c5ec28d2d4'),
+    'auto_xy/workers/rc16_reference_retention.py':
+        ('src/tools/rc16_reference_retention.py', 'f13869f8be882c08a029d02c6f967b89c0de0e45'),
 }
 LINK = 'klipper/klippy/extras/auto_xy_ratos_handoff_rc16.py'
 CONFIG = 'printer_data/config/auto_xy_rc16.cfg'
