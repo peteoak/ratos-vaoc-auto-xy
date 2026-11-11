@@ -45,7 +45,7 @@ SOURCES = {
     'printer_data/config/auto_xy_recommission_rc16_macros.cfg':
         ('config/auto_xy_recommission_rc16_macros.cfg', '1898cb6a949b6a5f747829df819795b2543db571'),
     'printer_data/config/auto_xy_thermal_rc16_macros.cfg':
-        ('config/auto_xy_thermal_rc16_macros.cfg', 'd4b8f0b46f57c0fa2e9f2e2d6d4c75a89bb0b62c'),
+        ('config/auto_xy_thermal_rc16_macros.cfg', '6ccf8beee9716b1c71f8c3e07a428ed42e264c38'),
 }
 LINK = 'klipper/klippy/extras/auto_xy_ratos_handoff_rc16.py'
 LINK_RECOMMISSION = 'klipper/klippy/extras/auto_xy_recommission_rc16.py'
