@@ -97,7 +97,10 @@ class NozzleRecommission:
     def _on_motor_off(self, *args):
         # Reference captures are invalidated by any motor disable. Do not
         # continue a reference session using coordinates from a prior home.
-        if self.phase not in ('IDLE', 'COMPLETE', 'CANCELLED'):
+        # RatOS may home during its initial native _VAOC_START. Before the
+        # first tool has been positioned/captured there is no nozzle image
+        # reference to invalidate. Any later motor-off/rehome invalidates it.
+        if self.phase not in ('IDLE', 'COMPLETE', 'CANCELLED', 'STARTING'):
             self.last_error = 'Motors were disabled; rehome and restart recommission'
             self.phase = 'INTERRUPTED'
             self.current_tool = None
