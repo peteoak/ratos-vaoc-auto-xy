@@ -156,7 +156,8 @@ def all_image_usage(root):
 
 def plan(root, success_days=7, failed_days=30, report_days=90, now=None,
          diagnostic_days=7, exports_days=30, limits_mib=None,
-         keep_latest_failures=2, max_total_images_mib=DEFAULT_TOTAL_IMAGES_MIB):
+         keep_latest_failures=2, max_total_images_mib=DEFAULT_TOTAL_IMAGES_MIB,
+         reference_root=DEFAULT_REFERENCE_ROOT):
     """Return an oldest-first safe deletion plan and accounting summary.
 
     Age eligibility OR category byte cap triggers reclamation. A report is
@@ -356,7 +357,8 @@ def main():
                                       diagnostic_days=opts.diagnostic_days,
                                       exports_days=opts.exports_days,
                                       limits_mib=limits,
-                                      max_total_images_mib=opts.max_total_images_mib)
+                                      max_total_images_mib=opts.max_total_images_mib,
+                                      reference_root=opts.reference_root)
     except ValueError as exc:
         p.error(str(exc))
     print('AutoXY storage retention:', 'DELETE' if opts.run else 'PREVIEW')
