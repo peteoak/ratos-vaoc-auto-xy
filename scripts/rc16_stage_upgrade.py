@@ -36,8 +36,10 @@ SOURCES = {
         ('src/tools/rc16_prepare_worker.py', '32852157d0e2cf3e2d1133bbfe2bad8720fa1f73'),
     'auto_xy/workers/rc16_generated_retention.py':
         ('src/tools/rc16_generated_retention.py', '300d82cd49a45fb365dd8dbb0b6ee6f1634b9a14'),
+    'auto_xy/vision/auto_xy_commission_candidates_rc16.py':
+        ('src/auto_xy_commission_candidates_rc16.py', '4fcfdfebeb218351634e3c156eef87baa296d706'),
     'auto_xy/workers/rc16_recommission_worker.py':
-        ('src/tools/rc16_recommission_worker.py', '75080147e157817b78cb710461de632e817c206d'),
+        ('src/tools/rc16_recommission_worker.py', 'd9438ab73a6d79f06b7da48c01c21d8c866fc142'),
     'auto_xy/workers/rc16_reference_retention.py':
         ('src/tools/rc16_reference_retention.py', 'dbac2708a1e13a53b2eee7caded910fc8f69427d'),
     'auto_xy/klipper/auto_xy_recommission_rc16.py':
