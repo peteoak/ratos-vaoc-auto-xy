@@ -71,7 +71,8 @@ class NozzleReferenceLifecycleTests(unittest.TestCase):
         return profile
 
     def publish(self, now=1_700_000_000):
-        with patch.object(worker, 'detect', return_value=(500., 450., 144.)):
+        with patch.object(worker, 'detect', return_value=(500., 450., 144.)), \
+             patch.object(worker, 'signature_from_frames', return_value={'format':'radial-v1','values':[0.,1.,0.,0.,0.,0.],'max_spread':0.}):
             return worker.publish(
                 self.new_session, self.new_images, 'http://localhost/test',
                 self.profile, self.archive,
@@ -110,6 +111,7 @@ class NozzleReferenceLifecycleTests(unittest.TestCase):
                 raise OSError('simulated archive manifest write failure')
             return original_write(path, data)
         with patch.object(worker, 'detect', return_value=(500., 450., 144.)), \
+             patch.object(worker, 'signature_from_frames', return_value={'format':'radial-v1','values':[0.,1.,0.,0.,0.,0.],'max_spread':0.}), \
              patch.object(worker, 'atomic_exclusive', side_effect=fail_on_retirement):
             with self.assertRaisesRegex(OSError, 'manifest write failure'):
                 worker.publish(self.new_session, self.new_images,
