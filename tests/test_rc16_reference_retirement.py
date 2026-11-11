@@ -19,6 +19,7 @@ def module(name, rel):
 
 worker = module('recommission_worker', 'src/tools/rc16_recommission_worker.py')
 retention = module('retired_reference_retention', 'src/auto_xy_retention_rc16.py')
+retired = module('retired_reference_cleanup', 'src/tools/rc16_reference_retention.py')
 
 
 class NozzleReferenceLifecycleTests(unittest.TestCase):
@@ -83,12 +84,12 @@ class NozzleReferenceLifecycleTests(unittest.TestCase):
         active_before = {p: Path(p).read_bytes()
                          for group in self.new_images for p in group}
         for elapsed_days in (0, 7, 29, 29.999):
-            report = retention.cleanup_retired_references(
+            report = retired.clean(
                 self.root, self.profile, now=moment + elapsed_days*86400,
                 execute=True)
             self.assertEqual(report['removed_generations'], 0)
             self.assertTrue(all(Path(p).exists() for group in self.old_images for p in group))
-        result = retention.cleanup_retired_references(
+        result = retired.clean(
             self.root, self.profile, now=moment + 30*86400, execute=True)
         self.assertEqual(result['removed_generations'], 1)
         self.assertEqual(result['removed_images'], 6)
@@ -116,7 +117,7 @@ class NozzleReferenceLifecycleTests(unittest.TestCase):
         current['tool0']['reference_images'][0] = (
             self.make_profile(self.old_images)['tool0']['reference_images'][0])
         self.profile.write_text(json.dumps(current))
-        result = retention.cleanup_retired_references(
+        result = retired.clean(
             self.root, self.profile, now=moment+31*86400, execute=True)
         self.assertEqual(result['removed_images'], 0)
         self.assertTrue(all(Path(p).exists() for group in self.old_images for p in group))
@@ -126,7 +127,7 @@ class NozzleReferenceLifecycleTests(unittest.TestCase):
         moment = 1_700_000_000
         receipt = self.publish(now=moment)
         Path(receipt['backup']).write_bytes(b'changed')
-        result = retention.cleanup_retired_references(
+        result = retired.clean(
             self.root, self.profile, now=moment+40*86400, execute=True)
         self.assertEqual(result['removed_images'], 0)
         self.assertTrue(all(Path(p).exists() for group in self.old_images for p in group))
