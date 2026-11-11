@@ -206,7 +206,8 @@ def check_active_installation(home, repo, live):
     link = home / 'klipper/klippy/extras/auto_xy_gate.py'
     require(link.is_symlink() and link.resolve() == installed,
             'Existing controller registration link differs')
-    for rel in (LINK, CONFIG, *[x for x in SOURCES if x != OLD_GATE]):
+    for rel in (LINK, LINK_RECOMMISSION, CONFIG,
+                *[x for x in SOURCES if x != OLD_GATE]):
         target = home / rel
         require(not target.exists() and not target.is_symlink(),
                 'RC16 target already present: ' + rel)
