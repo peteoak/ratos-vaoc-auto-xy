@@ -19,6 +19,7 @@ HOME = Path('/home/pi')
 INFO_URL = 'http://127.0.0.1:7125/printer/info'
 CONFIG_URL = ('http://127.0.0.1:7125/printer/objects/query?'
               'configfile&auto_xy_ratos_handoff_rc16&save_variables')
+SAVED_URL = 'http://127.0.0.1:7125/printer/objects/query?save_variables'
 RESTART_COMMAND = ('sudo', '-n', 'systemctl', 'restart', 'klipper')
 GCODE_URL = 'http://127.0.0.1:7125/printer/gcode/script'
 
@@ -56,7 +57,7 @@ def post_gcode(script):
 
 
 def saved_state():
-    status = query_json(CONFIG_URL)['result']['status']
+    status = query_json(SAVED_URL)['result']['status']
     variables = status.get('save_variables', {}).get('variables', {})
     if 'auto_xy_v2_enabled' not in variables:
         raise InstallationError('AutoXY saved enabled state missing')
