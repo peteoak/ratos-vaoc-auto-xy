@@ -40,13 +40,18 @@ SOURCES = {
         ('src/tools/rc16_recommission_worker.py', '818b6d8ac3f22c1e015f7759bd2a11c5ec28d2d4'),
     'auto_xy/workers/rc16_reference_retention.py':
         ('src/tools/rc16_reference_retention.py', '96154b3b8be55a2f964db796d7b7b43460d7d5da'),
+    'auto_xy/klipper/auto_xy_recommission_rc16.py':
+        ('src/auto_xy_recommission_rc16.py', 'c66e77cf77c0217772caabfbc9193bf4b0b8e105'),
+    'printer_data/config/auto_xy_recommission_rc16_macros.cfg':
+        ('config/auto_xy_recommission_rc16_macros.cfg', 'd27716b4fbaf56f93cc3bf2ca916a4e8801838f0'),
 }
 LINK = 'klipper/klippy/extras/auto_xy_ratos_handoff_rc16.py'
+LINK_RECOMMISSION = 'klipper/klippy/extras/auto_xy_recommission_rc16.py'
 CONFIG = 'printer_data/config/auto_xy_rc16.cfg'
 PRINTER = 'printer_data/config/printer.cfg'
 OLD_GATE = 'auto_xy/klipper/auto_xy_gate.py'
 GATE_CONFIG = 'printer_data/config/auto_xy.cfg'
-MANAGED = frozenset([*SOURCES, LINK, CONFIG, PRINTER, GATE_CONFIG])
+MANAGED = frozenset([*SOURCES, LINK, LINK_RECOMMISSION, CONFIG, PRINTER, GATE_CONFIG])
 
 
 class Refuse(RuntimeError):
@@ -84,7 +89,8 @@ def verify_sources(repo):
     require(b'RELEASE_VERSION = "0.5.0-rc16-dev1"' in files[OLD_GATE],
             'RC16 controller version mismatch')
     require(b'def load_config(config)' in files[OLD_GATE] and
-            b'def load_config(config)' in files['auto_xy/klipper/auto_xy_ratos_handoff_rc16.py'],
+            b'def load_config(config)' in files['auto_xy/klipper/auto_xy_ratos_handoff_rc16.py'] and
+            b'def load_config(config)' in files['auto_xy/klipper/auto_xy_recommission_rc16.py'],
             'Missing Klipper extension entrypoint')
     return old_data, files
 
@@ -148,7 +154,7 @@ def check_installation(home, repo, live):
     link = home / 'klipper/klippy/extras/auto_xy_gate.py'
     require(link.is_symlink() and link.resolve() == installed,
             'Existing gate symlink differs; refusing change')
-    for rel in (LINK, CONFIG, *[x for x in SOURCES if x != OLD_GATE]):
+    for rel in (LINK, LINK_RECOMMISSION, CONFIG, *[x for x in SOURCES if x != OLD_GATE]):
         target = home / rel
         require(not target.exists() and not target.is_symlink(),
                 'RC16 target already present: ' + rel)
@@ -220,6 +226,8 @@ def check_active_installation(home, repo, live):
     changes[PRINTER] = add_include(text).encode('utf-8')
     changes[LINK] = ('SYMLINK:' +
                      str(home / 'auto_xy/klipper/auto_xy_ratos_handoff_rc16.py')).encode('ascii')
+    changes[LINK_RECOMMISSION] = ('SYMLINK:' +
+                     str(home / 'auto_xy/klipper/auto_xy_recommission_rc16.py')).encode('ascii')
     return plan['variant'], changes
 
 
