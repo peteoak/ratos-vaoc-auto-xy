@@ -96,7 +96,7 @@ class NozzleRecommission:
             self._reject('toolhead missing')
         status = toolhead.get_status(self.reactor.monotonic())
         homed = str(status.get('homed_axes', ''))
-        if not all(axis in homed for axis in 'xyz':
+        if not all(axis in homed for axis in 'xyz'):
             self._reject('printer must have home XYZ; do not start capture')
         position = status.get('position')
         if position is None or len(position) < 3:
