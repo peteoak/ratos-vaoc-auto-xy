@@ -43,32 +43,32 @@ class ActiveMigrationTests(unittest.TestCase):
                     migration.preserve_enabled_gate(cfg)
 
     def test_gate_edit_preserves_other_sections_and_crlf(self):
-        cfg = ('[other_section]\\r\\n'
-               'protected_print_enabled: True\\r\\n'
-               '[auto_xy_gate]\\r\\n'
-               'protected_print_enabled: False\\r\\n'
-               'camera_detector_mode: two_stage_roi\\r\\n'
-               '[another_section]\\r\\n'
-               'protected_print_enabled: False\\r\\n')
+        cfg = ('[other_section]\r\n'
+               'protected_print_enabled: True\r\n'
+               '[auto_xy_gate]\r\n'
+               'protected_print_enabled: False\r\n'
+               'camera_detector_mode: two_stage_roi\r\n'
+               '[another_section]\r\n'
+               'protected_print_enabled: False\r\n')
         expected = cfg.replace(
-            '[auto_xy_gate]\\r\\nprotected_print_enabled: False',
-            '[auto_xy_gate]\\r\\nprotected_print_enabled: True')
+            '[auto_xy_gate]\r\nprotected_print_enabled: False',
+            '[auto_xy_gate]\r\nprotected_print_enabled: True')
         self.assertEqual(migration.preserve_enabled_gate(cfg), expected)
 
     def test_protection_key_in_other_section_is_not_accepted(self):
-        cfg = ('[auto_xy_gate]\\n'
-               'some_setting: value\\n'
-               '[unrelated]\\n'
-               'protected_print_enabled: True\\n')
+        cfg = ('[auto_xy_gate]\n'
+               'some_setting: value\n'
+               '[unrelated]\n'
+               'protected_print_enabled: True\n')
         with self.assertRaisesRegex(migration.MigrationError,
-                                    'in \\[auto_xy_gate\\]'):
+                                    'in \[auto_xy_gate\]'):
             migration.preserve_enabled_gate(cfg)
 
     def test_repeated_gate_section_refuses_ambiguous_migration(self):
-        cfg = ('[auto_xy_gate]\\nprotected_print_enabled: True\\n'
-               '[auto_xy_gate]\\nprotected_print_enabled: False\\n')
+        cfg = ('[auto_xy_gate]\nprotected_print_enabled: True\n'
+               '[auto_xy_gate]\nprotected_print_enabled: False\n')
         with self.assertRaisesRegex(migration.MigrationError,
-                                    'Expected one \\[auto_xy_gate\\]'):
+                                    'Expected one \[auto_xy_gate\]'):
             migration.preserve_enabled_gate(cfg)
 
     def test_handoff_enabled_with_automatic_cleanup(self):
