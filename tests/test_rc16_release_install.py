@@ -49,16 +49,24 @@ class ReleaseInstallTests(unittest.TestCase):
         self.assertTrue((receipt / release.RECEIPT).is_file())
 
     def test_fresh_failure_rolls_back_all_files_and_registration_link(self):
-        def fail():
-            raise release.ReleaseInstallError('simulated first startup failed')
-        with patch.object(release.ratos_extension, 'snapshot', return_value={
-            'registered': str(self.home / release.upgrade.OLD_GATE),
-            'link': str(self.home / release.upgrade.OLD_GATE)}), \
+        original_preflight = release.preflight
+        restarts = []
+        def restart():
+            restarts.append('restart')
+            if len(restarts) == 1:
+                raise release.ReleaseInstallError('simulated first startup failed')
+        with patch.object(release, 'preflight',
+                          side_effect=lambda home, root, live:
+                          original_preflight(home, root, live=False)), \
+             patch.object(release.ratos_extension, 'snapshot', return_value={
+                 'registered': str(self.home / release.upgrade.OLD_GATE),
+                 'link': str(self.home / release.upgrade.OLD_GATE)}), \
              patch.object(release.ratos_extension, 'unregister', return_value=None):
             with self.assertRaisesRegex(release.ReleaseInstallError, 'previous state restored'):
                 release.install_fresh(
                     self.home, ROOT, live=True,
-                    restart=fail, verify=lambda: None, activate=lambda: None)
+                    restart=restart, verify=lambda: None, activate=lambda: None)
+        self.assertEqual(restarts, ['restart', 'restart'])
         self.assertEqual(self.printer.read_text(), self.before_printer)
         self.assertFalse((self.home / 'printer_data/config/auto_xy.cfg').exists())
         self.assertFalse((self.home / 'printer_data/config/auto_xy_rc16.cfg').exists())
