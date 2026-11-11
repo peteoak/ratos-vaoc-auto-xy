@@ -26,6 +26,7 @@ sys.path.insert(0, str(AUTOXY_ROOT))
 # In the development checkout the vision detector lives in src/.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from auto_xy_detector import detect
+from auto_xy_reference_signature_rc16 import signature_from_frames
 from auto_xy_commission_candidates_rc16 import (
     resolve_manual_vaoc_ambiguity, CommissionAmbiguity)
 
@@ -178,10 +179,16 @@ def validate_frames(session, frame_groups, camera_url,
         require(spread <= 10. and 115. <= radius <= 185.
                 and max(abs(r-radius) for r in radii) <= 10.,
                 'T%d nozzle centre/rim inconsistent across frames' % tool)
+        # Freeze one illumination-normalised signature per TOOL, learned
+        # from all three operator-confirmed unmodified full-frame JPEGs.
+        # Reference comparison during future prints is supplementary to the
+        # existing, tuned Hough two_stage_roi measurement.
+        appearance = signature_from_frames(images, circles)
         profile['tool%d' % tool] = {
             'num_images': 3, 'radius_px': radius,
             'registration_center_px': [cx, cy],
-            'max_spread_px': spread, 'reference_images': refs}
+            'max_spread_px': spread, 'reference_images': refs,
+            'appearance_signature': appearance}
     return profile
 
 
