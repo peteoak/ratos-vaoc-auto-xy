@@ -100,6 +100,25 @@ class NozzleReferenceLifecycleTests(unittest.TestCase):
                          {p: Path(p).read_bytes()
                           for group in self.new_images for p in group})
 
+    def test_archive_write_failure_never_replaces_active_profile(self):
+        before = self.profile.read_bytes()
+        original_write = worker.atomic_exclusive
+        calls = []
+        def fail_on_retirement(path, data):
+            calls.append(Path(path).name)
+            if Path(path).name.startswith('retired_'):
+                raise OSError('simulated archive manifest write failure')
+            return original_write(path, data)
+        with patch.object(worker, 'detect', return_value=(500., 450., 144.)), \
+             patch.object(worker, 'atomic_exclusive', side_effect=fail_on_retirement):
+            with self.assertRaisesRegex(OSError, 'manifest write failure'):
+                worker.publish(self.new_session, self.new_images,
+                               'http://localhost/test', self.profile,
+                               self.archive, reference_root=self.root,
+                               results_root=self.results)
+        self.assertEqual(self.profile.read_bytes(), before)
+        self.assertFalse(any(p.name.startswith('retired_') for p in self.archive.iterdir()))
+
     def test_failed_recommission_does_not_start_retirement_clock(self):
         before = self.profile.read_bytes()
         with patch.object(worker, 'detect',
