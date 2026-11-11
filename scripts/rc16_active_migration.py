@@ -82,8 +82,7 @@ def active_handoff_config(home):
             'worker_python: ' + str(home / 'auto-xy-venv/bin/python') + '\n'
             'reference_root: ' + str(home / 'auto_xy/nozzle_references') + '\n'
             'results_root: ' + str(home / 'auto_xy/print_gate_runs') + '\n'
-            'profile: ' + str(home / 'auto_xy/camera_commission.json') + '\n'
-            'camera_url: http://127.0.0.1:8080/?action=snapshot\n')
+            'profile: ' + str(home / 'auto_xy/camera_commission.json') + '\n')
 
 
 def plan_existing_gate(home):
