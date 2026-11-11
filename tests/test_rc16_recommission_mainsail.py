@@ -117,6 +117,18 @@ class RecommissionControllerTests(unittest.TestCase):
                 self.coordinator.cmd_publish(Command({'CONFIRM': 1}))
                 worker.assert_called_once()
 
+    def test_motor_disable_invalidates_old_camera_references_and_requires_rehome(self):
+        with patch.object(self.coordinator, '_preflight', return_value=(1., 2., 3.)):
+            self.coordinator.cmd_begin(Command())
+            self.coordinator.cmd_positioned(Command({'TOOL': 0}))
+            self.coordinator.groups[0] = ['a', 'b', 'c']
+            self.printer.handlers['stepper_enable:motor_off']()
+            self.assertEqual(self.coordinator.phase, 'INTERRUPTED')
+            self.assertIsNone(self.coordinator.current_tool)
+            self.assertEqual(self.coordinator.groups, {0: [], 1: []})
+            with self.assertRaisesRegex(RuntimeError, 'Start recommissioning first'):
+                self.coordinator.cmd_positioned(Command({'TOOL': 0}))
+
     def test_cancel_refuses_while_worker_is_running(self):
         self.coordinator.proc = object()
         with self.assertRaisesRegex(RuntimeError, 'Capture/Save still running'):
