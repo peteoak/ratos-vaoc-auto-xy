@@ -81,6 +81,14 @@ def resolve_manual_vaoc_ambiguity(path, operator_confirmed=False):
             'Unable to identify one camera-reticle rim from independent evidence')
     selected=eligible[0]
     competitors=[c for c in candidates if c is not selected]
+    # Two overlapping Hough centres can be duplicate fits to the same
+    # reflective rim. A single high contrast score must not arbitrarily
+    # select between these competing geometries.
+    if any(math.hypot(selected['centre'][0]-c['centre'][0],
+                      selected['centre'][1]-c['centre'][1]) <
+           .65*max(selected['radius'],c['radius']) for c in competitors):
+        raise CommissionAmbiguity(
+            'Overlapping candidate circles; neither geometric fit is trusted')
     if any(selected['contrast']-c['contrast']<45. for c in competitors):
         raise CommissionAmbiguity(
             'Competing circular edge has similar rim evidence; no selection')
