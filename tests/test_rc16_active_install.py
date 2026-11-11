@@ -16,6 +16,13 @@ spec.loader.exec_module(installer)
 upgrade = installer.upgrade
 
 
+def ready_ui(status):
+    settings = status.get('configfile', {}).get('settings', {})
+    settings.setdefault('gcode_macro auto_xy_recommission_nozzles', {})
+    status.setdefault('auto_xy_recommission_rc16', {'ready': True})
+    return status
+
+
 class ActiveInstallerTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -59,6 +66,8 @@ class ActiveInstallerTests(unittest.TestCase):
         self.assertEqual(self.printer.read_bytes(), self.before[1])
         self.assertFalse((self.home / upgrade.CONFIG).exists())
         self.assertFalse((self.home / upgrade.LINK).exists())
+        self.assertFalse((self.home / upgrade.LINK_RECOMMISSION).exists())
+        self.assertFalse((self.home / 'printer_data/config/auto_xy_recommission_rc16_macros.cfg').exists())
 
     def test_active_install_is_single_transaction(self):
         calls = []
@@ -103,13 +112,15 @@ class ActiveInstallerTests(unittest.TestCase):
         expected = {
             'auto_xy_gate': {'protected_print_enabled': True},
             'auto_xy_ratos_handoff_rc16': {
-                'enabled': True, 'retention_enabled': True}}
+                'enabled': True, 'retention_enabled': True},
+            'gcode_macro auto_xy_recommission_nozzles': {}}
         def response(url):
             if url == installer.INFO_URL:
                 return {'result': {'state': 'ready'}}
             return {'result': {'status': {
                 'configfile': {'settings': expected},
                 'auto_xy_ratos_handoff_rc16': {'armed': True, 'sd_api_guarded': True, 'resume_api_guarded': True},
+                'auto_xy_recommission_rc16': {'ready': True},
                 'save_variables': {'variables': {
                     'auto_xy_v2_enabled': 1,
                     'auto_xy_v2_fault': 0,
@@ -144,7 +155,7 @@ class ActiveInstallerTests(unittest.TestCase):
                 'auto_xy_v2_in_progress': 0}}}
         def response(url):
             return ({'result': {'state': 'ready'}} if url == installer.INFO_URL
-                    else {'result': {'status': state}})
+                    else {'result': {'status': ready_ui(state)}})
         with patch.object(installer, 'query_json', side_effect=response):
             with self.assertRaisesRegex(installer.InstallationError,
                                         'calibration enable is OFF'):
@@ -167,7 +178,7 @@ class ActiveInstallerTests(unittest.TestCase):
                  'save_variables': {'variables': {'auto_xy_v2_enabled': 1}}}
         def response(url):
             return ({'result': {'state': 'ready'}} if url == installer.INFO_URL
-                    else {'result': {'status': state}})
+                    else {'result': {'status': ready_ui(state)}})
         with patch.object(installer, 'query_json', side_effect=response):
             with self.assertRaisesRegex(installer.InstallationError,
                                         'API guard is not active'):
@@ -184,7 +195,7 @@ class ActiveInstallerTests(unittest.TestCase):
                  'save_variables': {'variables': {'auto_xy_v2_enabled': 1}}}
         def response(url):
             return ({'result': {'state': 'ready'}} if url == installer.INFO_URL
-                    else {'result': {'status': state}})
+                    else {'result': {'status': ready_ui(state)}})
         with patch.object(installer, 'query_json', side_effect=response):
             with self.assertRaisesRegex(installer.InstallationError,
                                         'resume guard is not active'):
@@ -198,7 +209,7 @@ class ActiveInstallerTests(unittest.TestCase):
             'auto_xy_ratos_handoff_rc16': {'armed': True, 'sd_api_guarded': True, 'resume_api_guarded': True}}
         def response(url):
             return ({'result': {'state': 'ready'}} if url == installer.INFO_URL
-                    else {'result': {'status': status}})
+                    else {'result': {'status': ready_ui(status)}})
         with patch.object(installer, 'query_json', side_effect=response), \
              patch.object(installer, 'saved_state', return_value=(False, False)), \
              patch.object(installer, 'post_gcode') as send, \
@@ -220,7 +231,7 @@ class ActiveInstallerTests(unittest.TestCase):
                 'resume_api_guarded': True}}
         def response(url):
             return ({'result': {'state': 'ready'}} if url == installer.INFO_URL
-                    else {'result': {'status': status}})
+                    else {'result': {'status': ready_ui(status)}})
         with patch.object(installer, 'query_json', side_effect=response), \
              patch.object(installer, 'saved_state', return_value=(True, True)), \
              patch.object(installer, 'post_gcode') as send:
@@ -241,7 +252,7 @@ class ActiveInstallerTests(unittest.TestCase):
                 'auto_xy_v2_fault': 0, 'auto_xy_v2_in_progress': 0}}}
         def response(url):
             return ({'result': {'state': 'ready'}} if url == installer.INFO_URL
-                    else {'result': {'status': status}})
+                    else {'result': {'status': ready_ui(status)}})
         with patch.object(installer, 'query_json', side_effect=response):
             with self.assertRaisesRegex(installer.InstallationError,
                                         'measure-only mode remains enabled'):
