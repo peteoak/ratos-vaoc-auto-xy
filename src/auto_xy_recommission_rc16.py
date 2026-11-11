@@ -41,6 +41,8 @@ class NozzleRecommission:
         self.captured_position = None
         self._poll_timer = None
         self.printer.register_event_handler('klippy:shutdown', self._shutdown)
+        self.printer.register_event_handler('stepper_enable:motor_off', self._on_motor_off)
+        self.printer.register_event_handler('homing:home_rails_begin', self._on_motor_off)
         for command, callback in (
             ('AUTOXY_RECOMMISSION_BEGIN', self.cmd_begin),
             ('AUTOXY_RECOMMISSION_POSITIONED', self.cmd_positioned),
@@ -89,6 +91,15 @@ class NozzleRecommission:
         if vaoc is None:
             self._reject('native RatOS VAOC unavailable')
         return bool(vaoc.get_status(self.reactor.monotonic()).get('is_started', False))
+
+    def _on_motor_off(self, *args):
+        # Reference captures are invalidated by any motor disable. Do not
+        # continue a reference session using coordinates from a prior home.
+        if self.phase not in ('IDLE', 'COMPLETE', 'CANCELLED'):
+            self.last_error = 'Motors were disabled; rehome and restart recommission'
+            self.phase = 'INTERRUPTED'
+            self.current_tool = None
+            self.groups = {0: [], 1: []}
 
     def _tool_position(self):
         toolhead = self.printer.lookup_object('toolhead', None)
@@ -165,7 +176,7 @@ class NozzleRecommission:
             self._reject('vision interpreter missing')
         command = [
             self.python, str(self.worker), args['action'],
-            '--session', str(self.session), '--camera-url', self.camera,
+            '--session', str(self.session), '--camera-url', self._gate().camera,
             '--reference-root', str(self.reference_root),
             '--results-root', str(self.results_root)]
         if operation == 'CAPTURE':
@@ -292,6 +303,7 @@ class NozzleRecommission:
         if self.phase == 'PUBLISHED':
             raise gcmd.error('New profile already saved; use Finish to exit VAOC')
         self.phase = 'CANCELLED'
+        self.session = None
         self.current_tool = None
         self.groups = {0: [], 1: []}
         gcmd.respond_info('Recommission cancelled. Existing profile unchanged. '
