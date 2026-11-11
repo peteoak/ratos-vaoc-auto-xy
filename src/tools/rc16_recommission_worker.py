@@ -26,6 +26,8 @@ sys.path.insert(0, str(AUTOXY_ROOT))
 # In the development checkout the vision detector lives in src/.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from auto_xy_detector import detect
+from auto_xy_commission_candidates_rc16 import (
+    resolve_manual_vaoc_ambiguity, CommissionAmbiguity)
 
 REFERENCE_ROOT = Path('/home/pi/auto_xy/nozzle_references')
 RESULTS_ROOT = Path('/home/pi/auto_xy/print_gate_runs')
@@ -147,9 +149,23 @@ def validate_frames(session, frame_groups, camera_url,
                 # measurement remains on the tuned two_stage_roi pipeline.
                 circle = detect(path, roi=None, detector_mode='legacy')
             except ValueError as exc:
-                raise ValueError(
-                    'T%d %s ambiguous or invalid; current profile preserved: %s' %
-                    (tool, path.name, str(exc).split(';', 1)[0])) from exc
+                if 'Ambiguous camera ROI:' in str(exc):
+                    # The operator manually centred the selected T0/T1 nozzle
+                    # in native VAOC. The independent full-frame reticle and
+                    # annular-evidence fallback must agree or preserve the
+                    # old commissioning profile without a guessed candidate.
+                    try:
+                        circle = resolve_manual_vaoc_ambiguity(
+                            path, operator_confirmed=True)
+                    except CommissionAmbiguity as evidence_error:
+                        raise ValueError(
+                            'T%d %s has multiple nozzle candidates and manual '
+                            'VAOC evidence is inconclusive; profile preserved: %s'
+                            % (tool, path.name, evidence_error)) from evidence_error
+                else:
+                    raise ValueError(
+                        'T%d %s ambiguous or invalid; current profile preserved: %s'
+                        % (tool, path.name, str(exc).split(';', 1)[0])) from exc
             require(len(circle) == 3 and all(math.isfinite(float(v)) for v in circle),
                     'Nonfinite nozzle circle')
             circles.append(tuple(float(v) for v in circle))
