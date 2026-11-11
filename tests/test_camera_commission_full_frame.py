@@ -40,7 +40,8 @@ class CameraCommissionTests(unittest.TestCase):
     def test_ambiguous_nozzle_remains_fail_closed_without_crop_advice(self):
         def detect(path, roi=None):
             raise ValueError(
-                'Ambiguous full-frame nozzle detection: 2 plausible rim circles')
+                'Ambiguous camera ROI: 2 nozzle-sized circles detected; '
+                'commission a tighter image crop rather than guessing')
         with patch.object(commission, 'detect', side_effect=detect):
             with self.assertRaises(ValueError) as error:
                 commission.create_profile(
