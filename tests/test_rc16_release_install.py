@@ -73,6 +73,47 @@ class ReleaseInstallTests(unittest.TestCase):
         self.assertFalse((self.home / 'klipper/klippy/extras/auto_xy_gate.py').exists())
         self.assertFalse((self.home / 'klipper/klippy/extras/auto_xy_recommission_rc16.py').exists())
 
+    def test_supervised_fresh_installer_registers_and_unregisters_only_autoxy(self):
+        registry = {'owner': None}
+        link = self.home / 'klipper/klippy/extras/auto_xy_gate.py'
+        original_home = release.baseline.HOME
+        def absent(home):
+            if registry['owner'] is not None or link.exists() or link.is_symlink():
+                raise RuntimeError('AutoXY registration already present')
+        def register(home, target):
+            if registry['owner'] is not None:
+                raise RuntimeError('duplicate registration')
+            registry['owner'] = str(target)
+            link.symlink_to(target)
+        def snapshot(home):
+            return {'registered': registry['owner'],
+                    'link': str(link.resolve()) if link.is_symlink() else None}
+        def unregister(home, expected, other):
+            self.assertEqual(registry['owner'], expected)
+            self.assertEqual(other, expected)
+            registry['owner'] = None
+            link.unlink()
+        starts = []
+        def restart():
+            starts.append('restart')
+            if len(starts) == 1:
+                raise release.ReleaseInstallError('simulated Klipper not ready')
+        with patch.object(release.baseline, 'HOME', self.home.resolve()), \
+             patch.object(release.baseline, 'live_safe',
+                          return_value={'idex_xoffset': -.1, 'idex_yoffset': -.2,
+                                        'idex_zoffset': .02}), \
+             patch.object(release.ratos_extension, 'verify_absent', side_effect=absent), \
+             patch.object(release.ratos_extension, 'register', side_effect=register), \
+             patch.object(release.ratos_extension, 'snapshot', side_effect=snapshot), \
+             patch.object(release.ratos_extension, 'unregister', side_effect=unregister):
+            with self.assertRaisesRegex(release.ReleaseInstallError, 'previous state restored'):
+                release.install_fresh(self.home, ROOT, live=True,
+                                      restart=restart, activate=lambda: None)
+        self.assertEqual(registry['owner'], None)
+        self.assertFalse(link.exists() or link.is_symlink())
+        self.assertEqual(self.printer.read_text(), self.before_printer)
+        self.assertEqual(starts, ['restart', 'restart'])
+
     def test_unified_offline_upgrade_recognises_reviewed_baseline(self):
         baseline = release.baseline.plan(self.home, ROOT, 'fresh')
         release.baseline.install(self.home, baseline, 'fresh', offsets=None)
