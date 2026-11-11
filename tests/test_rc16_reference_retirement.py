@@ -158,6 +158,53 @@ class NozzleReferenceLifecycleTests(unittest.TestCase):
         self.assertTrue(tally['all_images']['protected_reference_bytes'] > 0)
         self.assertFalse(any(self.root in e['path'].parents for e in selected))
 
+    def test_abandoned_session_cleanup_requires_thirty_days_and_no_references(self):
+        now = 1_800_000_000
+        self.publish(now=now - 50*86400)
+        orphan = self.root / 'session-abcdefgh'
+        orphan.mkdir()
+        photo = orphan / 't0_abcdefabcdef_1.jpg'
+        photo.write_bytes(b'old unreferenced image')
+        import os
+        old = now - 31*86400
+        os.utime(orphan, (old, old))
+        before = retired.clean_abandoned_sessions(
+            self.root, self.profile, now=now-2*86400, execute=True)
+        self.assertEqual(before['removed_sessions'], 0)
+        self.assertTrue(photo.exists())
+        after = retired.clean_abandoned_sessions(
+            self.root, self.profile, now=now, execute=True)
+        self.assertEqual(after['removed_sessions'], 1)
+        self.assertFalse(orphan.exists())
+        self.assertTrue(all(Path(p).exists() for group in self.new_images for p in group))
+
+    def test_abandoned_cleanup_does_not_delete_active_or_archived_references(self):
+        now = 1_800_000_000
+        self.publish(now=now-50*86400)
+        import os
+        for folder in (self.old_session, self.new_session):
+            os.utime(folder, (now-60*86400, now-60*86400))
+        result = retired.clean_abandoned_sessions(
+            self.root, self.profile, now=now, execute=True)
+        self.assertEqual(result['removed_sessions'], 0)
+        self.assertTrue(all(Path(p).exists() for group in self.old_images for p in group))
+        self.assertTrue(all(Path(p).exists() for group in self.new_images for p in group))
+
+    def test_corrupt_archive_blocks_abandoned_capture_deletion(self):
+        now = 1_800_000_000
+        self.publish(now=now-50*86400)
+        orphan = self.root / 'session-abcdefgh'
+        orphan.mkdir()
+        photo = orphan / 't0_abcdefabcdef_1.jpg'
+        photo.write_bytes(b'unreferenced')
+        import os
+        os.utime(orphan, (now-60*86400, now-60*86400))
+        (self.archive / 'camera_commission_broken.json').write_text('not json')
+        outcome = retired.clean_abandoned_sessions(
+            self.root, self.profile, now=now, execute=True)
+        self.assertEqual(outcome['removed_images'], 0)
+        self.assertTrue(photo.exists())
+
     def test_results_tree_cannot_be_used_for_reference_capture(self):
         rogue = self.results / 'run-1'
         rogue.mkdir()
