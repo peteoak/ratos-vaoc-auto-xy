@@ -87,8 +87,10 @@ def activate_persistent_gate():
             or status.get('auto_xy_ratos_handoff_rc16', {}).get('sd_api_guarded') is not True
             or status.get('auto_xy_ratos_handoff_rc16', {}).get('resume_api_guarded') is not True):
         raise InstallationError('Cannot enable before native print protection is armed')
-    enabled, _ = saved_state()
-    if not enabled:
+    enabled, measure_only = saved_state()
+    # Production AutoXY must CORRECT and verify, not silently remain in
+    # observation-only commissioning mode from a previous installation.
+    if not enabled or measure_only:
         post_gcode('AUTO_XY_ON')
 
 
