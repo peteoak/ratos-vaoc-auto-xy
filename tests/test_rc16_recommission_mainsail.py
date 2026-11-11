@@ -36,10 +36,15 @@ class Printer:
         self.gcode = Gcode()
         self.reactor = Reactor()
         self.handlers = {}
+        self.vaoc = object()
     def get_reactor(self):
         return self.reactor
     def lookup_object(self, name, default=None):
-        return self.gcode if name == 'gcode' else default
+        if name == 'gcode':
+            return self.gcode
+        if name == 'gcode_macro _VAOC':
+            return self.vaoc
+        return default
     def register_event_handler(self, name, callback):
         self.handlers[name] = callback
 
@@ -81,6 +86,11 @@ class RecommissionControllerTests(unittest.TestCase):
         self.coordinator = mod.load_config(Config(self.printer, self.root))
         self.coordinator.worker = ROOT / 'src/tools/rc16_recommission_worker.py'
         self.coordinator.python = __import__('sys').executable
+
+    def test_maintenance_readiness_requires_native_vaoc(self):
+        self.assertTrue(self.coordinator.get_status(0)['ready'])
+        self.printer.vaoc = None
+        self.assertFalse(self.coordinator.get_status(0)['ready'])
 
     def test_begin_never_homes_or_opens_vaoc_in_python(self):
         with patch.object(self.coordinator, '_preflight', return_value=(1., 2., 3.)):
