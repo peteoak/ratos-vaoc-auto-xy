@@ -75,8 +75,8 @@ def saved_state():
             measure in ('1', '1.0', 'true'))
 
 
-def activate_persistent_gate():
-    """Enable AutoXY only after the RC16 processor is loaded and armed."""
+def activate_persistent_gate(fresh=False):
+    """Enable after handoff is armed; new installations may lack saved flags."""
     info = query_json(INFO_URL)['result']
     status = query_json(CONFIG_URL)['result']['status']
     if info.get('state') != 'ready':
@@ -90,11 +90,17 @@ def activate_persistent_gate():
             or status.get('auto_xy_recommission_rc16', {}).get('ready') is not True):
 
         raise InstallationError('Cannot enable before native print protection is armed')
-    enabled, measure_only = saved_state()
-    # Production AutoXY must CORRECT and verify, not silently remain in
-    # observation-only commissioning mode from a previous installation.
-    if not enabled or measure_only:
+    # Pre-existing installations must preserve and validate every saved
+    # safety marker. Fresh installs have no AutoXY flags until AUTO_XY_ON
+    # creates them; the shared signed baseline preflight has already checked
+    # that no prior faults/held print are present.
+    if fresh:
         post_gcode('AUTO_XY_ON')
+    else:
+        enabled, measure_only = saved_state()
+        # Active operation must correct/verify, not silently stay measure-only.
+        if not enabled or measure_only:
+            post_gcode('AUTO_XY_ON')
 
 
 def restore_saved_state(original):
