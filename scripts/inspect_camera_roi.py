@@ -22,18 +22,39 @@ MAX_PIXELS = 20_000_000
 
 
 def parse_roi(value, width, height):
-    if value == 'auto':
-        return (0, 0, width, height)
-    try:
-        parts = [int(x.strip()) for x in value.split(',')]
-    except ValueError as exc:
-        raise ValueError('ROI must be auto or four integer x,y,w,h values') from exc
-    if len(parts) != 4:
-        raise ValueError('ROI must be auto or four integer x,y,w,h values')
-    x, y, w, h = parts
-    if x < 0 or y < 0 or w < 200 or h < 200 or x + w > width or y + h > height:
-        raise ValueError('ROI outside image or too small; preserve the complete nozzle rim')
-    return x, y, w, h
+    if value != 'auto':
+        raise ValueError('Full-frame diagnostics only: keep --roi auto; '
+                         'do not tighten the crop')
+    return 0, 0, width, height
+
+
+def annular_contrast(gray, center_x, center_y, radius):
+    """Read-only evidence, NOT permission to select a candidate.
+
+    Compare central 38% of candidate radius with the surrounding 48-80%
+    annulus. A real nozzle may be worn, dirty, or illuminated differently;
+    brightness contrast alone must never authorize nozzle identification.
+    """
+    h, w = gray.shape
+    extent = int(np.ceil(radius * .82)) + 1
+    left = max(0, int(np.floor(center_x)) - extent)
+    right = min(w, int(np.ceil(center_x)) + extent + 1)
+    top = max(0, int(np.floor(center_y)) - extent)
+    bottom = min(h, int(np.ceil(center_y)) + extent + 1)
+    if left >= right or top >= bottom:
+        raise ValueError('Candidate outside camera image')
+    yy, xx = np.ogrid[top:bottom, left:right]
+    d2 = (xx - center_x)**2 + (yy - center_y)**2
+    core = gray[top:bottom, left:right][d2 < (.38 * radius)**2]
+    ring = gray[top:bottom, left:right][
+        (d2 > (.48 * radius)**2) & (d2 < (.80 * radius)**2)]
+    if not len(core) or not len(ring):
+        raise ValueError('Candidate core or ring outside image')
+    core_mean = float(core.mean())
+    ring_mean = float(ring.mean())
+    return {'central_mean_gray': round(core_mean, 1),
+            'annular_mean_gray': round(ring_mean, 1),
+            'annular_minus_center_gray': round(ring_mean - core_mean, 1)}
 
 
 def inspect_image(path, roi='auto'):
@@ -63,6 +84,13 @@ def inspect_image(path, roi='auto'):
             cx, cy, radius = map(float, candidate)
             if MIN_RADIUS <= radius <= MAX_RADIUS:
                 candidates.append((cx+x, cy+y, radius))
+    gray_full = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    evidence = [
+        dict(center_x_px=round(cx, 2), center_y_px=round(cy, 2),
+             radius_px=round(r, 2),
+             **annular_contrast(gray_full, cx, cy, r))
+        for cx, cy, r in candidates
+    ]
     return image, {
         'file': path.name,
         'image_size_px': [width, height],
@@ -71,6 +99,7 @@ def inspect_image(path, roi='auto'):
         'candidates_xy_radius_px': [
             [round(cx, 2), round(cy, 2), round(r, 2)]
             for cx, cy, r in candidates],
+        'candidate_evidence_diagnostic_only': evidence,
         'status': 'AMBIGUOUS' if len(candidates) > 1
                   else 'ONE_POSSIBILITY_NOT_COMMISSIONED' if candidates
                   else 'NO_CANDIDATES',
@@ -102,7 +131,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--images', nargs='+', required=True,
                         help='Saved T0/T1 JPEG frames, preferably all six commissioning frames')
-    parser.add_argument('--roi', default='auto', help='auto or x,y,w,h')
+    parser.add_argument('--roi', default='auto', choices=('auto',),
+                        help='Full camera frame only; cropping is not supported')
     parser.add_argument('--no-preview', action='store_true',
                         help='Print candidate coordinates only; do not write preview JPEGs')
     args = parser.parse_args(argv)
@@ -121,7 +151,7 @@ def main(argv=None):
             failed = True
             print('ROI INSPECTION FAILED (%s): %s' % (Path(name).name, exc),
                   file=sys.stderr, flush=True)
-    print('Circle labels are diagnostics, NOT nozzle identification. '
+    print('Circle labels and ring contrast are diagnostics, NOT nozzle identification. '
           'Keep the full-frame ROI; inspect nozzle rim wear, focus and '
           'lighting across all frames. Do not change saved offsets.', flush=True)
     return 2 if failed else 0
