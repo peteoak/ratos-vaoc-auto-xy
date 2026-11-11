@@ -127,6 +127,15 @@ class RecommissionControllerTests(unittest.TestCase):
                 self.coordinator.cmd_publish(Command({'CONFIRM': 1}))
                 worker.assert_called_once()
 
+    def test_native_vaoc_start_may_home_before_nozzle_is_positioned(self):
+        with patch.object(self.coordinator, '_preflight', return_value=(1., 2., 3.)):
+            self.coordinator.cmd_begin(Command())
+        self.assertEqual(self.coordinator.phase, 'STARTING')
+        self.printer.handlers['homing:home_rails_begin']()
+        self.printer.handlers['stepper_enable:motor_off']()
+        self.assertEqual(self.coordinator.phase, 'STARTING')
+        self.assertEqual(self.coordinator.groups, {0: [], 1: []})
+
     def test_motor_disable_invalidates_old_camera_references_and_requires_rehome(self):
         with patch.object(self.coordinator, '_preflight', return_value=(1., 2., 3.)):
             self.coordinator.cmd_begin(Command())
