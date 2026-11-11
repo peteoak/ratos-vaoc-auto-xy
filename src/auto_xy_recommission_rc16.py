@@ -151,10 +151,13 @@ class NozzleRecommission:
             if (float(state.get('temperature', 999.)) > limit or
                     float(state.get('target', 999.)) > target_limit):
                 self._reject('nozzle temperature/target exceeds camera-safe limit')
-        pos = self._tool_position()
         if require_vaoc != self._vaoc_active():
             self._reject('native VAOC state unexpected; use Mainsail Start/Finish')
-        return pos
+        # START must work just after a normal print, when motors have been
+        # disabled and XYZ is no longer homed. Stock _VAOC_START owns the
+        # homing/positioning procedure; only actual CAPTURE/PUBLISH requires
+        # homed XYZ. Never home or move from this extension itself.
+        return self._tool_position() if require_vaoc else None
 
     def _library(self):
         root, results = self.reference_root, self.results_root
