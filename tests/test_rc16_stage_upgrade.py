@@ -25,6 +25,9 @@ class StagedUpgradeTests(unittest.TestCase):
         self.rc15 = (ROOT / 'src/auto_xy_gate.py').read_bytes()
         self.gate_path = self.home / 'auto_xy/klipper/auto_xy_gate.py'
         self.gate_path.write_bytes(self.rc15)
+        vision = self.home / 'auto_xy/vision/auto_xy_vision_worker.py'
+        vision.parent.mkdir(parents=True, exist_ok=True)
+        vision.write_bytes((ROOT / 'src/auto_xy_vision_worker.py').read_bytes())
         self.existing = self.home / 'klipper/klippy/extras/auto_xy_gate.py'
         self.existing.symlink_to(self.gate_path)
         self.config = self.home / 'printer_data/config/auto_xy.cfg'
