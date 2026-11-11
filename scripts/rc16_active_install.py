@@ -18,7 +18,7 @@ import rc16_stage_upgrade as upgrade
 HOME = Path('/home/pi')
 INFO_URL = 'http://127.0.0.1:7125/printer/info'
 CONFIG_URL = ('http://127.0.0.1:7125/printer/objects/query?'
-              'configfile&auto_xy_ratos_handoff_rc16&save_variables')
+              'configfile&auto_xy_ratos_handoff_rc16&auto_xy_recommission_rc16&save_variables')
 SAVED_URL = 'http://127.0.0.1:7125/printer/objects/query?save_variables'
 RESTART_COMMAND = ('sudo', '-n', 'systemctl', 'restart', 'klipper')
 GCODE_URL = 'http://127.0.0.1:7125/printer/gcode/script'
@@ -86,7 +86,9 @@ def activate_persistent_gate():
             or settings.get('auto_xy_ratos_handoff_rc16', {}).get('enabled') is not True
             or status.get('auto_xy_ratos_handoff_rc16', {}).get('armed') is not True
             or status.get('auto_xy_ratos_handoff_rc16', {}).get('sd_api_guarded') is not True
-            or status.get('auto_xy_ratos_handoff_rc16', {}).get('resume_api_guarded') is not True):
+            or status.get('auto_xy_ratos_handoff_rc16', {}).get('resume_api_guarded') is not True
+            or status.get('auto_xy_recommission_rc16', {}).get('ready') is not True):
+
         raise InstallationError('Cannot enable before native print protection is armed')
     enabled, measure_only = saved_state()
     # Production AutoXY must CORRECT and verify, not silently remain in
@@ -136,6 +138,11 @@ def check_active_runtime(timeout=90, sleep=time.sleep):
                     raise InstallationError('RC16 direct virtual-SD API guard is not active')
                 if coordinator.get('resume_api_guarded') is not True:
                     raise InstallationError('RC16 direct virtual-SD resume guard is not active')
+                recommission = status.get('auto_xy_recommission_rc16', {})
+                if recommission.get('ready') is not True:
+                    raise InstallationError('RC16 Mainsail nozzle recommissioning is not ready')
+                if 'gcode_macro auto_xy_recommission_nozzles' not in sections:
+                    raise InstallationError('RC16 Recommission Nozzles Mainsail macro is missing')
                 # The config flags alone do not enable AutoXY. The controller
                 # also reads its persistent SAVE_VARIABLE state on each run.
                 saved = status.get('save_variables', {}).get('variables', {})
