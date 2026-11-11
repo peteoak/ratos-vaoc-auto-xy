@@ -75,7 +75,15 @@ def active_handoff_config(home):
             'retention_enabled: True\n'
             'retention_days: 30\n'
             'retention_interval_hours: 24\n'
-            'retention_worker: ' + str(home / 'auto_xy/workers/rc16_generated_retention.py') + '\n')
+            'retention_worker: ' + str(home / 'auto_xy/workers/rc16_generated_retention.py') + '\n'
+            '\n[include auto_xy_recommission_rc16_macros.cfg]\n'
+            '\n[auto_xy_recommission_rc16]\n'
+            'worker: ' + str(home / 'auto_xy/workers/rc16_recommission_worker.py') + '\n'
+            'worker_python: ' + str(home / 'auto-xy-venv/bin/python') + '\n'
+            'reference_root: ' + str(home / 'auto_xy/nozzle_references') + '\n'
+            'results_root: ' + str(home / 'auto_xy/print_gate_runs') + '\n'
+            'profile: ' + str(home / 'auto_xy/camera_commission.json') + '\n'
+            'camera_url: http://127.0.0.1:8080/?action=snapshot\n')
 
 
 def plan_existing_gate(home):
