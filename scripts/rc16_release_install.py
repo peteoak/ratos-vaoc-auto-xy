@@ -64,9 +64,20 @@ def rollback_fresh(home, baseline_snapshot, rc16_snapshot, *, live):
         if state['registered'] != expected or state['link'] != expected:
             raise ReleaseInstallError('RatOS registration differs; manual recovery required')
         ratos_extension.unregister(home, expected, expected)
-    # No live-safe requirement here: a failed Klipper startup is precisely
-    # why this rollback may be needed. The manifests verify installed files.
-    baseline.rollback(home, baseline_snapshot, live=False)
+    # After RatOS unregisters the baseline symlink, the exact fresh-install
+    # snapshot needs to restore the originally absent link. Its ordinary
+    # verify_installed=True branch would incorrectly expect that now-removed
+    # symlink, so validate the snapshot and restore with link verification
+    # already performed by ratos_extension.unregister above.
+    manifest_path = Path(baseline_snapshot) / 'manifest.json'
+    receipt = json.loads(manifest_path.read_text(encoding='utf-8'))
+    if (receipt.get('mode') != 'fresh' or
+            receipt.get('home') != str(home) or
+            not (home / 'auto_xy/rollbacks').resolve() ==
+                Path(baseline_snapshot).resolve().parent):
+        raise ReleaseInstallError('RC15 fresh rollback snapshot mismatched')
+    baseline.restore(home, Path(baseline_snapshot), receipt,
+                     verify_installed=False)
 
 
 def install_fresh(home, root, *, live,
@@ -130,13 +141,14 @@ def install_complete(home, root, *, live,
                                 restart=restart, verify=verify,
                                 activate=activate)
         return 'fresh-active', receipt
-    variant, changes, _ = preflight(home, root, live=live)
-    # Reuse the already-tested active upgrade with a single restart,
-    # saved state preservation and automatic rollback.
+    _, package, _ = preflight(home, root, live=live)
+    variant, prepared = package
+    # Reuse the existing active migration, including one restart and exact
+    # saved-state rollback. Offline simulation uses the same file transaction.
     if live:
         return active.install(home, root, live=True,
                               restart=restart, verify=verify)
-    receipt = upgrade.stage(home, changes[1] if isinstance(changes, tuple) else changes)
+    receipt = upgrade.stage(home, prepared)
     return variant, receipt
 
 
