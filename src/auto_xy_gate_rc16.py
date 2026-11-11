@@ -1770,7 +1770,12 @@ class AutoXYGate:
                 # The earliest print hook has already enforced the fault
                 # latch. At the post-heatsoak gate, trust nothing stale:
                 # recheck homing, individual motors, offsets and temperature.
-                if (reuse_candidate and self.reuse_enabled() and
+                # Protected independent IDEX files ALWAYS get a fresh
+                # camera measurement after homing and heatsoak. Never re-use
+                # an earlier print's alignment, even if a legacy saved
+                # auto_xy_v2_reuse_enabled opt-in flag remains set.
+                if (not self.protected_print_enabled and
+                    reuse_candidate and self.reuse_enabled() and
                     not self.flag('auto_xy_v2_measure_only')):
                     eligible,why=self._reuse_check(check_thermal=True)
                     if eligible:
