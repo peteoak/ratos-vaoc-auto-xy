@@ -35,6 +35,9 @@ class ActiveInstallerTests(unittest.TestCase):
         self.gate = self.home / upgrade.OLD_GATE
         self.previous_gate = (ROOT / 'src/auto_xy_gate.py').read_bytes()
         self.gate.write_bytes(self.previous_gate)
+        vision = self.home / 'auto_xy/vision/auto_xy_vision_worker.py'
+        vision.parent.mkdir(parents=True, exist_ok=True)
+        vision.write_bytes((ROOT / 'src/auto_xy_vision_worker.py').read_bytes())
         (self.home / 'klipper/klippy/extras/auto_xy_gate.py').symlink_to(self.gate)
         self.settings = self.home / upgrade.GATE_CONFIG
         self.settings.write_text(
