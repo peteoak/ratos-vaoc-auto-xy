@@ -157,6 +157,8 @@ class AutoXYGate:
         # retain their existing photo profile during a guarded upgrade.
         self.manual_vaoc_confirmation_required=config.getboolean('manual_vaoc_confirmation_required',False)
         self.commission_profile=os.path.expanduser(config.get('commission_profile','/home/pi/auto_xy/camera_commission.json'))
+        self.nozzle_reference_root=os.path.expanduser(
+            config.get('nozzle_reference_root','/home/pi/auto_xy/nozzle_references'))
         self._commission_data=None
         self._slicer_printing_temps=None
         self._slicer_camera_targets=None
@@ -406,7 +408,8 @@ class AutoXYGate:
         if profile.get('reference_schema')!='rc16-full-frame-raw-jpeg-v1':
             raise ValueError('Unknown nozzle reference image format')
         import hashlib
-        root=os.path.realpath('/home/pi/auto_xy/nozzle_references')
+        root=os.path.realpath(getattr(self,'nozzle_reference_root',
+                                        '/home/pi/auto_xy/nozzle_references'))
         observed=set()
         for tool in ('tool0','tool1'):
             photos=profile[tool].get('reference_images')
