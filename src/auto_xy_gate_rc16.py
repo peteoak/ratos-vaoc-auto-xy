@@ -901,7 +901,8 @@ class AutoXYGate:
                '--expected-center':'expected_center',
                '--expected-radius':'expected_radius',
                '--registration-anchor':'registration_anchor',
-               '--registration-anchor-center':'registration_anchor_center'}
+               '--registration-anchor-center':'registration_anchor_center',
+               '--expected-signature':'expected_signature'}
         for index in range(0,len(cmd)):
             if cmd[index] in flags:
                 options[flags[cmd[index]]]=cmd[index+1]
@@ -986,6 +987,13 @@ class AutoXYGate:
                     raise GateAbort('Incomplete commissioning profile for detector guard')
                 cmd.extend(['--expected-center',','.join(str(v) for v in center),
                             '--expected-radius',str(radius)])
+                appearance=tool_entry.get('appearance_signature')
+                if appearance is not None:
+                    if self.camera_detector_mode!='two_stage_roi':
+                        raise GateAbort('RC16 photo reference requires two_stage_roi')
+                    cmd.extend(['--expected-signature',
+                                json.dumps(appearance,allow_nan=False,
+                                           separators=(',',':'))])
             if registration_anchor is not None:
                 anchor_path,anchor_center=registration_anchor
                 cmd.extend(['--registration-anchor',anchor_path,
@@ -1024,6 +1032,11 @@ class AutoXYGate:
                     if local_center is not None:
                         if norm(vecsub(point,[float(v) for v in local_center]))>max(90.,1.2*float(tool_entry['radius_px'])):
                             raise ValueError('Nozzle candidate too far from this printer\'s commissioned camera location')
+                if (self._commission_data and
+                        self._commission_data['tool%d'%self.active].get('appearance_signature')
+                        and not (isinstance(data.get('appearance_evidence'),dict)
+                                 and data['appearance_evidence'].get('matched') is True)):
+                    raise GateAbort('RC16 nozzle photo identity was not verified')
                 if self.camera_worker_mode=='persistent' and isinstance(data.get('timing_s'),dict):
                     self.report.setdefault('vision_stage_timings',[]).append(
                         {'label':label,'attempt':attempt+1,**data['timing_s']})
