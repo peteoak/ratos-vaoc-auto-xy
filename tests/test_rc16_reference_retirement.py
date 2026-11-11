@@ -113,6 +113,21 @@ class NozzleReferenceLifecycleTests(unittest.TestCase):
         self.assertEqual(list(self.archive.iterdir()), [])
         self.assertTrue(all(Path(p).exists() for group in self.old_images for p in group))
 
+    def test_interrupted_cleanup_resumes_after_partial_deletion(self):
+        moment = 1_700_000_000
+        receipt = self.publish(now=moment)
+        first = Path(self.old_images[0][0])
+        first.unlink()  # Simulated prior cleanup that stopped before completion
+        remaining = sum(Path(p).exists() for group in self.old_images for p in group)
+        self.assertEqual(remaining, 5)
+        result = retired.clean(
+            self.root, self.profile, now=moment + 31*86400, execute=True)
+        self.assertEqual(result['removed_generations'], 1)
+        self.assertEqual(result['removed_images'], 5)
+        self.assertFalse(Path(receipt['retired_manifest']).exists())
+        self.assertFalse(Path(receipt['backup']).exists())
+        self.assertTrue(all(Path(p).exists() for group in self.new_images for p in group))
+
     def test_current_image_referenced_from_old_generation_is_not_removed(self):
         moment = 1_700_000_000
         self.publish(now=moment)
