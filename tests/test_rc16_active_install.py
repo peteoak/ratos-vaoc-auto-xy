@@ -19,6 +19,7 @@ upgrade = installer.upgrade
 def ready_ui(status):
     settings = status.get('configfile', {}).get('settings', {})
     settings.setdefault('gcode_macro auto_xy_recommission_nozzles', {})
+    settings.setdefault('gcode_macro AUTO_XY_TEMPERATURE', {})
     status.setdefault('auto_xy_recommission_rc16', {'ready': True})
     return status
 
@@ -113,7 +114,8 @@ class ActiveInstallerTests(unittest.TestCase):
             'auto_xy_gate': {'protected_print_enabled': True},
             'auto_xy_ratos_handoff_rc16': {
                 'enabled': True, 'retention_enabled': True},
-            'gcode_macro AUTO_XY_RECOMMISSION_NOZZLES': {}}
+            'gcode_macro AUTO_XY_RECOMMISSION_NOZZLES': {},
+            'gcode_macro AUTO_XY_TEMPERATURE': {}}
         def response(url):
             if url == installer.INFO_URL:
                 return {'result': {'state': 'ready'}}
