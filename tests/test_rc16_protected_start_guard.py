@@ -41,6 +41,12 @@ class ProtectedStartGuardTests(unittest.TestCase):
                         body.index('reuse_candidate and self.reuse_enabled()'))
         self.assertIn('ALWAYS get a fresh', body)
 
+    def test_protected_calibrate_ignores_old_reuse_flag_without_shortcut(self):
+        protected = self.body('cmd_AUTOXY_PRINT_CALIBRATE')
+        self.assertNotIn("if self.reuse_enabled():", protected)
+        self.assertNotIn('turn reuse OFF', protected)
+        self.assertIn("self.cmd_AUTO_XY_GATE(_RetryGcmd(gcmd,'PRINT'))", protected)
+
     def test_protected_gate_still_rejects_unconverted_idex(self):
         gate = self.body('cmd_AUTO_XY_GATE')
         self.assertIn('self.protected_print_enabled and not self._protected_inside_gate', gate)
