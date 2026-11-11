@@ -105,7 +105,10 @@ class NozzleReferenceLifecycleTests(unittest.TestCase):
         with patch.object(worker, 'detect',
                           side_effect=ValueError('two nozzle-sized circles')):
             with self.assertRaisesRegex(ValueError, 'current profile preserved'):
-                self.publish()
+                worker.publish(self.new_session, self.new_images,
+                               'http://localhost/test', self.profile,
+                               self.archive, reference_root=self.root,
+                               results_root=self.results)
         self.assertEqual(self.profile.read_bytes(), before)
         self.assertEqual(list(self.archive.iterdir()), [])
         self.assertTrue(all(Path(p).exists() for group in self.old_images for p in group))
