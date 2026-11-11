@@ -121,6 +121,7 @@ class RecommissionControllerTests(unittest.TestCase):
         self.printer.vaoc = Status({'is_started': False})
         self.coordinator.cmd_begin(Command())
         self.assertEqual(self.coordinator.phase, 'STARTING')
+        self.printer.vaoc = Status({'is_started': True})
         with self.assertRaisesRegex(RuntimeError, 'home XYZ'):
             self.coordinator._preflight(require_vaoc=True)
 
