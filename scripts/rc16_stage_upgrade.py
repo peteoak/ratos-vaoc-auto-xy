@@ -164,8 +164,17 @@ def check_installation(home, repo, live):
             'Existing gate symlink differs; refusing change')
     for rel in (LINK, LINK_RECOMMISSION, CONFIG, *[x for x in SOURCES if x != OLD_GATE]):
         target = home / rel
-        require(not target.exists() and not target.is_symlink(),
-                'RC16 target already present: ' + rel)
+        if rel == 'auto_xy/vision/auto_xy_vision_worker.py':
+            # This is a controlled replacement of the signed RC15 vision
+            # worker, NOT a previously installed RC16 target. Its exact
+            # legacy bytes are captured in the rollback snapshot.
+            source = (repo / 'src/auto_xy_vision_worker.py').read_bytes()
+            require(target.is_file() and not target.is_symlink()
+                    and target.read_bytes() == source,
+                    'Existing RC15 camera worker differs; preserve and review')
+        else:
+            require(not target.exists() and not target.is_symlink(),
+                    'RC16 target already present: ' + rel)
     if live:
         require(home == HOME, 'Live staging requires canonical /home/pi')
         # This is the read-only RC15 Moonraker/VAOC/temperature preflight.
@@ -217,8 +226,17 @@ def check_active_installation(home, repo, live):
     for rel in (LINK, LINK_RECOMMISSION, CONFIG,
                 *[x for x in SOURCES if x != OLD_GATE]):
         target = home / rel
-        require(not target.exists() and not target.is_symlink(),
-                'RC16 target already present: ' + rel)
+        if rel == 'auto_xy/vision/auto_xy_vision_worker.py':
+            # This is a controlled replacement of the signed RC15 vision
+            # worker, NOT a previously installed RC16 target. Its exact
+            # legacy bytes are captured in the rollback snapshot.
+            source = (repo / 'src/auto_xy_vision_worker.py').read_bytes()
+            require(target.is_file() and not target.is_symlink()
+                    and target.read_bytes() == source,
+                    'Existing RC15 camera worker differs; preserve and review')
+        else:
+            require(not target.exists() and not target.is_symlink(),
+                    'RC16 target already present: ' + rel)
     if live:
         require(home == HOME, 'Live upgrade requires canonical /home/pi')
         import install_autoxy
