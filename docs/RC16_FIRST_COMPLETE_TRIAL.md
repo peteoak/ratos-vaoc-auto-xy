@@ -2,7 +2,7 @@
 
 **Build status:** One integrated source tree, source checksums pinned, offline tests passed. This is a **supervised test candidate**, not approval for unattended printing or a production release. It must be tested on actual RatOS/VAOC hardware before promotion.
 
-For current observed hardware progress and remaining acceptance criteria, see [RC16 release status](RC16_RELEASE_STATUS.md). Ordinary Mainsail Pause/Cancel is **not guaranteed responsive while calibration owns the G-code queue**. The [asynchronous redesign](RC16_PAUSE_CANCEL_INTEGRATION_DESIGN.md) is specified but not yet implemented or hardware-qualified; do not use Pause/Cancel as an emergency-stop substitute.
+For current observed hardware progress and remaining acceptance criteria, see [RC16 release status](RC16_RELEASE_STATUS.md). **Accepted Klipper operating limitation:** ordinary Mainsail Pause/Cancel may be queued while synchronous AutoXY calibration runs. This is understood and accepted by the owner and is not a release blocker. If the printer behaves unsafely, use Klipper **Emergency Stop** (shutdown, not a resumable Pause); then start afresh after normal recovery, homing and protected calibration. An [optional asynchronous redesign](RC16_PAUSE_CANCEL_INTEGRATION_DESIGN.md) is documented for possible future work, not required for RC16.
 
 ## One user-visible installation transaction
 
@@ -243,6 +243,6 @@ no recovery/fault remains pending.
 
 - Hardware accuracy, Pi 4 resource load, actual RatOS registered command ownership, native VAOC recovery behaviour and rollback after real Klipper startup failure cannot be proven by GitHub CI.
 - Commissioning candidate disambiguation and photographic appearance-match thresholds have synthetic tests but **must be validated against original unannotated images**. A refused result is preferable to a false calibration.
-- Native Mainsail Pause/Cancel responsiveness during synchronous gated calibration is a **known queueing limitation**; fail-close and emergency stop remain distinct. Resolve or explicitly qualify this operational limitation before calling the first full release complete.
+- Native Mainsail Pause/Cancel responsiveness during synchronous gated calibration is a **known, owner-accepted Klipper queueing limitation, not a release blocker**. Emergency Stop remains a separate immediate shutdown action; it is not resumable and invalidates the alignment session.
 - A recoverable pre-write failure can hold/resume the same source print. A failed calibration following an unreconciled offset write **aborts**, rather than pretending a held-file manual resume is safe.
 - No unattended protected printing until every critical test passes and captured evidence confirms the correct ordering and offset integrity.
