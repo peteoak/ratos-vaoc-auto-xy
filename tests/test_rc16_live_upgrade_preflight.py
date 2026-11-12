@@ -18,6 +18,10 @@ class RC15UpgradePreflightTests(unittest.TestCase):
         self.home = Path(self.temp.name)/'pi'
         (self.home/'auto-xy-venv/bin').mkdir(parents=True)
         (self.home/'auto-xy-venv/bin/python').write_text('interpreter')
+        (self.home/'printer_data/config').mkdir(parents=True)
+        (self.home/'printer_data/config/auto_xy.cfg').write_text(
+            '[auto_xy_gate]\n'
+            'python: ' + str(self.home/'auto-xy-venv/bin/python') + '\n')
         self.saved = {'auto_xy_v2_enabled': 1,
                       'auto_xy_v2_measure_only': 0,
                       'auto_xy_v2_fault': 0,
@@ -49,6 +53,25 @@ class RC15UpgradePreflightTests(unittest.TestCase):
         return migration.live_rc15_upgrade_safe(self.home,
                                                  status_reader=self.reader,
                                                  python_check=self.deps)
+
+    def test_custom_configured_interpreter_is_preserved(self):
+        custom = self.home / 'my-optical-python/bin/python'
+        custom.parent.mkdir(parents=True)
+        custom.write_text('executable placeholder')
+        (self.home/'printer_data/config/auto_xy.cfg').write_text(
+            '[auto_xy_gate]\\npython: '+str(custom)+'\\n')
+        self.status['configfile']['settings']['auto_xy_gate']['python'] = str(custom)
+        result = self.inspect()
+        self.assertEqual(result['vision_python'],str(custom))
+        self.assertFalse(result['vision_bootstrap_required'])
+
+    def test_absent_standard_environment_is_not_a_preflight_failure(self):
+        import shutil
+        shutil.rmtree(self.home/'auto-xy-venv')
+        result = self.inspect()
+        self.assertTrue(result['vision_bootstrap_required'])
+        self.assertEqual(result['vision_python'],
+                         str(self.home/'auto-xy-venv/bin/python'))
 
     def test_known_enabled_owner_rc15_accepted_without_saved_variable_changes(self):
         before = dict(self.saved)
