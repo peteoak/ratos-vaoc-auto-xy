@@ -41,6 +41,35 @@ class ActiveUpgradeTransactionTests(unittest.TestCase):
                                  '#*# SAVE_CONFIG\n#*# offsets stay untouched\n')
         self.printer.write_text(self.original_printer)
 
+    def test_live_upgrade_uses_enabled_rc15_safe_preflight_not_fresh_mode(self):
+        from unittest.mock import patch
+        import rc16_active_migration
+        import ratos_extension
+        expected = str(self.gate)
+        with patch.object(upgrade, 'HOME', self.home), \
+             patch.object(rc16_active_migration, 'live_rc15_upgrade_safe',
+                          return_value={'existing_enabled': True}) as safe, \
+             patch.object(ratos_extension, 'snapshot',
+                          return_value={'registered': expected,
+                                        'link': expected}):
+            variant, changes = upgrade.check_active_installation(
+                self.home, ROOT, live=True)
+        safe.assert_called_once_with(self.home)
+        self.assertEqual(variant,'rc15-dev6-reference')
+        self.assertIn(upgrade.CONFIG,changes)
+        self.assertIn(b'enabled: True',changes[upgrade.CONFIG])
+
+    def test_live_upgrade_propagates_an_unresolved_rc15_fault(self):
+        from unittest.mock import patch
+        import rc16_active_migration
+        with patch.object(upgrade,'HOME',self.home), \
+             patch.object(rc16_active_migration,'live_rc15_upgrade_safe',
+                 side_effect=rc16_active_migration.MigrationError(
+                     'Unresolved RC15 calibration/recovery state: auto_xy_v2_fault')):
+            with self.assertRaisesRegex(Exception,'Unresolved RC15'):
+                upgrade.check_active_installation(self.home, ROOT, live=True)
+        self.assertNotIn(upgrade.INCLUDE,self.printer.read_text())
+
     def test_active_transaction_round_trip(self):
         variant, changes = upgrade.check_active_installation(
             self.home, ROOT, live=False)
