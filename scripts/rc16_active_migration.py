@@ -103,7 +103,8 @@ def plan_existing_gate(home):
             'handoff_config_bytes': active_handoff_config(home).encode('utf-8')}
 
 
-def live_rc15_upgrade_safe(home, status_reader=None, python_check=None):
+def live_rc15_upgrade_safe(home, status_reader=None, python_check=None,
+                            motion_reader=None):
     """Read-only RC15->RC16 preflight, distinct from RC15 *fresh/rollback*.
 
     A healthy installed RC15 may already have auto_xy_v2_enabled=1. That is
@@ -168,11 +169,32 @@ def live_rc15_upgrade_safe(home, status_reader=None, python_check=None):
     if any(stale.values()):
         require(not selected and state in ('standby', 'complete', 'cancelled'),
                 'Possible held RC15 print/retry context; cancel or inspect before upgrade')
-    toolhead = status.get('toolhead')
-    require(isinstance(toolhead, dict) and
-            math.isfinite(float(toolhead.get('velocity', float('nan')))) and
-            float(toolhead.get('velocity', float('nan'))) == 0.,
-            'Printer is moving or toolhead velocity unknown')
+    # Klipper 'toolhead' exposes position, homed axes and MAX velocity;
+    # it does NOT expose instantaneous velocity. Use motion_report.live_velocity
+    # instead. Missing/unreadable motion data is a safe refusal, not 0 mm/s.
+    motion = status.get('motion_report')
+    if motion is None:
+        if motion_reader is not None:
+            motion = motion_reader()
+        else:
+            import json
+            from urllib.request import urlopen
+            try:
+                with urlopen(
+                        'http://127.0.0.1:7125/printer/objects/query?motion_report',
+                        timeout=8) as response:
+                    motion = json.load(response)['result']['status']['motion_report']
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                raise MigrationError(
+                    'Moonraker motion_report unavailable; cannot confirm printer idle') from exc
+    require(isinstance(motion, dict),
+            'Moonraker motion_report unavailable; cannot confirm printer idle')
+    try:
+        velocity = float(motion.get('live_velocity', float('nan')))
+    except (ValueError, TypeError) as exc:
+        raise MigrationError('Invalid motion_report.live_velocity') from exc
+    require(math.isfinite(velocity) and abs(velocity) < .001,
+            'Printer is moving or motion_report.live_velocity unknown')
 
     for heater in ('extruder', 'extruder1', 'heater_bed'):
         obj = status.get(heater)
