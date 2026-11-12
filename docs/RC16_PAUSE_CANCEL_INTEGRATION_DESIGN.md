@@ -1,8 +1,12 @@
 # RC16 protected calibration — responsive Pause/Cancel design
 
-**Status:** Architecture and acceptance criteria. **Not installed or active.**
-Do not describe standard Mainsail Pause or Cancel as responsive during the
-current synchronous `AUTO_XY_GATE`.
+**Status:** Optional future architecture only. **Not installed or active.**
+The owner has explicitly accepted standard Klipper Pause/Cancel command queueing
+as an RC16 operating limitation, with Emergency Stop for unsafe conditions.
+This optional design is **not a release blocker**, is not scheduled for RC16,
+and must not be portrayed as a required safety fix.
+Do not describe ordinary Mainsail Pause or Cancel as immediately responsive
+during the current synchronous `AUTO_XY_GATE`.
 
 ## Current, confirmed limitation
 
@@ -21,7 +25,7 @@ for an immediate unsafe situation. Emergency stop shuts down Klipper; it is
 **not** a resumable pause and invalidates the measurement. A held protected
 print must not be resumed after shutdown without a fresh guarded start.
 
-## Required asynchronous architecture for actual Mainsail Pause/Cancel
+## Optional future asynchronous architecture for responsive Mainsail Pause/Cancel
 
 1. After normal RatOS bed heatsoak and before Beacon and extrusion, record
    the exact protected source identity (name, hash, selection, session ID),
@@ -78,7 +82,7 @@ print must not be resumed after shutdown without a fresh guarded start.
 - Do not roll this architecture into the installed candidate before isolated
   Klipper simulator tests and supervised RatOS hardware qualification.
 
-## Acceptance tests required before declaring this resolved
+## Acceptance tests if this optional architecture is ever implemented
 
 1. While T0/T1 images are being captured, issue ordinary Mainsail Pause;
    assert responsive acknowledgement, no new offset writes, file still held.
@@ -97,6 +101,6 @@ print must not be resumed after shutdown without a fresh guarded start.
 9. Verify interface responsiveness and no extra Pi 4 load under heavy
    camera processing, plus manual emergency-stop operation.
 
-**Release classification:** The current RC16 remains a *supervised
-candidate* with this known limitation, not yet an unattended/fully
-interactive protected-print release.
+**Release classification:** The existing Klipper queueing limitation is
+accepted for RC16. Any broader unattended-print qualification depends on
+other RC16 release checks, not on implementing this optional redesign.
