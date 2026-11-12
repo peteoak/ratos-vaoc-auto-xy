@@ -29,6 +29,14 @@ class VisionRefreshTests(unittest.TestCase):
             side_effect=lambda root,home:(self.original,self.new))
         self.guard.start()
         self.addCleanup(self.guard.stop)
+        original_blob=refresh.blob
+        digest_guard=patch.object(refresh,'blob',
+            side_effect=lambda data:
+                refresh.NEW_BLOB if data==self.new else
+                refresh.OLD_BLOB if data==self.original else
+                original_blob(data))
+        digest_guard.start()
+        self.addCleanup(digest_guard.stop)
 
     def test_idle_checks_reject_held_or_active_prints(self):
         state={'print_stats':{'state':'standby'},
