@@ -18,6 +18,15 @@ The installer performs source verification, known-install recognition, Klipper/R
 A failed download, failed preflight or unsuccessful restart verification can then
 end the user's SSH shell immediately, appearing as a printer disconnection.
 The installer itself requests a **Klipper service restart only**, not an OS reboot.
+RatOS operators whose sudo requires a password are supported: the installer
+prompts via the interactive SSH terminal using `sudo -v` **before any printer
+file, virtual environment or saved-state changes**, and the restart uses
+ordinary `sudo systemctl restart klipper`, not `sudo -n`. The password is
+handled by sudo itself and is not echoed or written to the installer log.
+Run the installer from an actual interactive SSH terminal, not a detached
+job or an unattended scheduler. If authentication fails, the installer
+refuses before changing printer files. A refreshed sudo prompt can appear
+during rollback if credentials expire.
 
 For a future trial, launch the entire installer in a **child Bash process**
 and tee its output to a persistent log. The parent SSH shell must remain
@@ -38,8 +47,8 @@ printf 'Installer child exit code: %d\n' "${PIPESTATUS[0]}"
 
 The command above is **a template only**, not a printer-ready installation
 instruction: replace the placeholder with the reviewed frozen commit and
-qualify recovery from the observed SSH failure before attempting another
-installation. Never enable the shell's `errexit` option in the parent SSH
+verify the 18-file rollback and saved-state recovery from the failed
+previous installation before attempting another installation. Never enable the shell's `errexit` option in the parent SSH
 terminal. Do not immediately rerun the installation to diagnose an unexplained
 disconnect.
 
