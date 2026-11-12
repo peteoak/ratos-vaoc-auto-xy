@@ -98,7 +98,24 @@ def restart():
 def ready():
     import rc16_active_install as active
     active.wait_for_klipper_ready(timeout=120)
-    active.check_active_runtime(timeout=30)
+    status = read_status(
+        'http://127.0.0.1:7125/printer/objects/query?'
+        'configfile&auto_xy_ratos_handoff_rc16&auto_xy_recommission_rc16')
+    settings = status.get('configfile', {}).get('settings', {})
+    gate_cfg = settings.get('auto_xy_gate', {})
+    handoff_cfg = settings.get('auto_xy_ratos_handoff_rc16', {})
+    handoff = status.get('auto_xy_ratos_handoff_rc16', {})
+    recommission = status.get('auto_xy_recommission_rc16', {})
+    if (gate_cfg.get('protected_print_enabled') is not True or
+            handoff_cfg.get('enabled') is not True or
+            handoff.get('armed') is not True or
+            handoff.get('sd_api_guarded') is not True or
+            handoff.get('resume_api_guarded') is not True or
+            recommission.get('ready') is not True):
+        raise Refusal('RC16 runtime protection not fully restored after restart')
+    # Deliberately do not require saved auto_xy_v2_enabled=1: normal
+    # successful manual recovery may leave AutoXY OFF until the operator
+    # explicitly reenables it for the next supervised print.
 
 
 def install(root, home, live=True, do_restart=restart, wait=ready):
