@@ -149,11 +149,55 @@ One package includes:
 - protected active T0/T1 reference photographs; superseded reference generation and abandoned-session 30-day cleanup
 - exact transactional rollback snapshots and status verification
 
+## Mandatory native VAOC alignment before RC16 reference capture
+
+**Do not capture or save RC16 nozzle reference images until native RatOS VAOC
+has been used to establish and confirm the correct physical XY alignment of
+T0 and T1.** Merely seeing both nozzles inside the camera window, or taking
+a photograph of each nozzle, is **not** sufficient. Commissioning records
+images of an already correctly aligned nozzle arrangement; it does **not**
+perform, calculate, write or save nozzle XY offset corrections.
+
+In Mainsail, while the printer is idle, no print is held/paused, and nozzle
+temperatures meet the camera-safe limits:
+
+1. Run `AUTO_XY_RECOMMISSION_NOZZLES` to enter **native RatOS VAOC**.
+   Follow its normal homing, tool positioning and alignment procedures.
+2. Use native VAOC controls to establish the correct XY relationship between
+   T0 and T1. Confirm this **actual nozzle-to-nozzle alignment** using the
+   normal native VAOC procedure; perform/save any necessary offset
+   corrections through native VAOC itself, not through the RC16 reference
+   capture or Save action.
+3. For each tool, position its nozzle accurately at the VAOC camera
+   reticle/crosshair before capture. The RC16 commissioning ambiguity
+   resolver assumes a reticle **at the centre of the full camera frame**;
+   if your reticle is elsewhere, do not force ambiguous captures or
+   treat a successful image capture as proof of alignment.
+4. Once alignment is correct, use `AUTO_XY_RECOMMISSION_T0` followed by
+   `AUTO_XY_RECOMMISSION_CAPTURE_T0`. Confirm the capture has completed
+   and that T0 has **3/3** fresh full-frame photographs.
+5. Select `AUTO_XY_RECOMMISSION_T1`, confirm its native VAOC positioning
+   and correct alignment, then use `AUTO_XY_RECOMMISSION_CAPTURE_T1`.
+   Confirm T1 also has **3/3** images.
+6. Use `AUTO_XY_RECOMMISSION_SAVE` **only after** correct physical alignment
+   has been confirmed and both image groups are captured. Wait for the
+   published/saved confirmation, then run
+   `AUTO_XY_RECOMMISSION_FINISH` to close VAOC.
+
+If either nozzle is misaligned, return to native VAOC alignment **before**
+saving references. If capture or validation fails, do not bypass the
+failure or publish guessed reference centres; retain the previous profile
+and correct the camera/positioning issue. An RC16 `Recommission saved`
+message confirms the *reference profile* was published, **not** that
+native VAOC alignment is correct or that offsets were adjusted. Nozzle
+alignment must be established separately and the subsequent supervised
+protected-print test must still verify automatic correction.
+
 ## Supervised sequence — one install, then test the complete solution
 
 1. Run exactly one fully active installation on an idle/cool machine, preferably in a supervised session with SSH and Mainsail visible. Collect the installation receipt and confirm READY.
 2. Verify status panel entries and macro availability: Recommission Nozzles, T0/T1 capture, Save, Finish, Cancel, temperature selector and native manual VAOC.
-3. Recommission both nozzles once using real full-frame images. Record that six reference JPEGs and independent T0/T1 centres/radii/signatures are present; original or previous profile remains recoverable.
+3. **First establish correct T0/T1 physical XY alignment using native VAOC, then capture the RC16 reference images** following the mandatory procedure above. Record six reference JPEGs and independent T0/T1 centres/radii/signatures; the previous profile remains recoverable. Do not confuse successful image publication with nozzle-offset calibration.
 4. Verify normal single-tool and COPY/MIRROR prints bypass nozzle XY calibration.
 5. Start a small independent two-tool print. Confirm fresh homing after motor disable, normal RatOS bed heatsoak, camera measurements before Beacon and extrusion, bounded correction and verification.
 6. Perform another independent print after motors disable. Confirm fresh alignment; do not reuse prior measurements even if legacy reuse opt-in persisted.
