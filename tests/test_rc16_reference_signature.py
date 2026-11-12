@@ -60,7 +60,7 @@ class ReferenceSignatureTests(unittest.TestCase):
             self.paths,[(600.,440.,146.)]*3)
         noisy=Path(self.temp.name)/'oozing.png'
         original=cv2.imread(str(self.paths[1]),cv2.IMREAD_GRAYSCALE)
-        cv2.circle(original,(600,440),115,5,-1)
+        cv2.circle(original,(600,440),90,5,-1)
         cv2.imwrite(str(noisy),original)
         evidence=rc16_signatures.compare(
             noisy,(600.,440.),146.,reference)
