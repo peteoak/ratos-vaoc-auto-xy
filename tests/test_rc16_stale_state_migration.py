@@ -77,6 +77,7 @@ class StaleStateMigrationTests(unittest.TestCase):
 
     def test_only_explicit_fixed_commands_allowed(self):
         with patch.object(mod,'urlopen') as url:
+            url.return_value.__enter__.return_value.read.return_value = b'{}'
             mod.post_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_fault VALUE=0')
             self.assertEqual(url.call_count,1)
             with self.assertRaisesRegex(mod.InstallationError,'Disallowed'):
