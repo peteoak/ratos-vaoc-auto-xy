@@ -28,6 +28,42 @@ class ReleaseInstallTests(unittest.TestCase):
                                '#*# SAVE_CONFIG\n#*# preserved offsets\n')
         self.printer.write_text(self.before_printer)
 
+    def test_missing_canonical_vision_venv_is_prepared_in_same_install(self):
+        def create(path):
+            self.assertEqual(path, self.home/'auto-xy-venv')
+            path.mkdir()
+            (path/'pyvenv.cfg').write_text('home = /usr/bin')
+            (path/'bin').mkdir()
+            (path/'bin/python').write_text('fake executable')
+        with patch.object(release.vision_env,'install_new_venv',
+                          side_effect=create) as install, \
+             patch.object(release,'install_complete',
+                          return_value=('fresh-active','receipt')) as complete:
+            got=release.install_complete_with_vision(self.home,ROOT,live=True)
+        self.assertEqual(got,('fresh-active','receipt'))
+        install.assert_called_once()
+        complete.assert_called_once()
+
+    def test_missing_vision_venv_is_removed_after_failed_install(self):
+        def create(path):
+            path.mkdir()
+            (path/'pyvenv.cfg').write_text('home = /usr/bin')
+        with patch.object(release.vision_env,'install_new_venv',
+                          side_effect=create), \
+             patch.object(release,'install_complete',
+                          side_effect=release.ReleaseInstallError('simulated rollback')):
+            with self.assertRaisesRegex(release.ReleaseInstallError,'rollback'):
+                release.install_complete_with_vision(self.home,ROOT,live=True)
+        self.assertFalse((self.home/'auto-xy-venv').exists())
+        self.assertEqual(self.printer.read_text(),self.before_printer)
+
+    def test_incomplete_existing_vision_venv_is_not_overwritten(self):
+        (self.home/'auto-xy-venv').mkdir()
+        with patch.object(release.vision_env,'install_new_venv') as install:
+            with self.assertRaisesRegex(release.ReleaseInstallError,'refusing overwrite'):
+                release.prepare_vision(self.home,'fresh',live=True)
+        install.assert_not_called()
+
     def test_detects_new_install_without_guessing_partial(self):
         self.assertEqual(release.install_kind(self.home), 'fresh')
         (self.home / 'printer_data/config/auto_xy.cfg').write_text('partial')
