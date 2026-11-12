@@ -2,6 +2,8 @@
 
 **Build status:** One integrated source tree, source checksums pinned, offline tests passed. This is a **supervised test candidate**, not approval for unattended printing or a production release. It must be tested on actual RatOS/VAOC hardware before promotion.
 
+For current observed hardware progress and remaining acceptance criteria, see [RC16 release status](RC16_RELEASE_STATUS.md). Ordinary Mainsail Pause/Cancel is **not guaranteed responsive while calibration owns the G-code queue**. The [asynchronous redesign](RC16_PAUSE_CANCEL_INTEGRATION_DESIGN.md) is specified but not yet implemented or hardware-qualified; do not use Pause/Cancel as an emergency-stop substitute.
+
 ## One user-visible installation transaction
 
 The installer is `scripts/rc16_release_install.py install`; it supports either an AutoXY-free RatOS installation or a **recognised** existing RC15 installation. It performs one complete fully ACTIVE install, not a temporary disabled stage or a series of printer-side patches.
