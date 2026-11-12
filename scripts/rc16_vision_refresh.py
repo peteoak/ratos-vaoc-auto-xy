@@ -122,12 +122,14 @@ def install(root, home, live=True, do_restart=restart, wait=ready):
     (backup/'receipt.json').write_text(json.dumps({
         'old_blob': OLD_BLOB, 'new_blob': NEW_BLOB,
         'installed_target': str(target), 'mode': mode}, indent=2))
+    written = False
     try:
         if live:
             check_idle(read_status(STATUS_URL))
         if target.read_bytes() != before:
             raise Refusal('Installed vision source changed after backup')
         replace_atomic(target, after, mode)
+        written = True
         if blob(target.read_bytes()) != NEW_BLOB:
             raise Refusal('Vision refresh verification failed')
         if live:
@@ -135,6 +137,8 @@ def install(root, home, live=True, do_restart=restart, wait=ready):
             wait()
             check_idle(read_status(STATUS_URL))
     except BaseException as exc:
+        if not written:
+            raise Refusal('Vision refresh refused before replacing printer file: %s' % exc) from exc
         try:
             if blob(target.read_bytes()) != NEW_BLOB:
                 raise Refusal('Vision target changed unexpectedly; manual recovery required')
