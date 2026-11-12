@@ -115,7 +115,7 @@ def archive_migration_state(receipt, state):
     try:
         with os.fdopen(fd, 'w', encoding='utf-8') as out:
             json.dump({'schema': 1, 'state': state}, out, indent=2, sort_keys=True)
-            out.write('\\n')
+            out.write('\n')
             out.flush()
             os.fsync(out.fileno())
     except BaseException:
@@ -131,6 +131,10 @@ def set_migration_flag(key, value):
 
 def reset_stale_flags(original):
     """Clear only obsolete latches after installation, leaving offsets untouched."""
+    current = read_migration_state()
+    if current['offsets'] != original['offsets'] or current['flags'] != original['flags']:
+        raise InstallationError(
+            'Saved state changed during upgrade; refusing reset and restoring installation')
     old = original['flags']
     if any(old[key] for key in SAFETY_FLAGS):
         # Prior printer state was audited by the RC15 live preflight.
