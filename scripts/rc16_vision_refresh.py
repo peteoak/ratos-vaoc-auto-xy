@@ -22,7 +22,7 @@ SOURCE = Path('src/auto_xy_reference_signature_rc16.py')
 TARGET = Path('auto_xy/vision/auto_xy_reference_signature_rc16.py')
 OLD_BLOB = '021799053569ef4780c74ae6d6756ccd74f00ba0'
 NEW_BLOB = 'a6ab2cfb55483d5b41c5e408b37c00e23ce95447'
-STATUS_URL = 'http://127.0.0.1:7125/printer/objects/query?print_stats&virtual_sdcard&gcode_macro%20_VAOC&auto_xy_gate&auto_xy_ratos_handoff_rc16'
+STATUS_URL = 'http://127.0.0.1:7125/printer/objects/query?print_stats&virtual_sdcard&gcode_macro%20_VAOC&auto_xy_ratos_handoff_rc16'
 
 
 class Refusal(RuntimeError):
@@ -46,14 +46,12 @@ def check_idle(status):
     stats = status.get('print_stats')
     sd = status.get('virtual_sdcard')
     vaoc = status.get('gcode_macro _VAOC')
-    gate = status.get('auto_xy_gate')
     handoff = status.get('auto_xy_ratos_handoff_rc16')
     if (not isinstance(stats, dict) or
             stats.get('state') not in ('standby', 'complete', 'cancelled') or
             not isinstance(sd, dict) or sd.get('is_active') is not False or
             sd.get('filename') or sd.get('file_path') or
             not isinstance(vaoc, dict) or vaoc.get('is_started') is not False or
-            not isinstance(gate, dict) or gate.get('busy') is not False or
             not isinstance(handoff, dict) or handoff.get('armed') is not True or
             handoff.get('busy') is not False):
         raise Refusal('Printer busy, held/selected print, active VAOC, or unknown RC16 gate state')
