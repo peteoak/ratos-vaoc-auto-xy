@@ -51,7 +51,7 @@ class ReferenceSignatureTests(unittest.TestCase):
         cv2.circle(image,(600,440),146,65,-1)
         cv2.circle(image,(600,440),51,250,-1)
         cv2.imwrite(str(altered),image)
-        with self.assertRaisesRegex(ValueError,'differs'):
+        with self.assertRaisesRegex(ValueError,'outer rim lacks commissioned likeness'):
             rc16_signatures.compare(altered,(600.,440.),146.,reference)
 
     def test_hot_nozzle_with_central_ooze_keeps_outer_rim_match(self):
