@@ -108,7 +108,8 @@ def live_rc15_upgrade_safe(home, status_reader=None, python_check=None):
 
     A healthy installed RC15 may already have auto_xy_v2_enabled=1. That is
     the expected running configuration and MUST NOT block an active upgrade.
-    Fault, in-progress and retry markers still block migration. This function
+    Old fault/in-progress/retry markers are migrated only when provably stale.
+    This function
     does not issue G-code, change saved variables or move/heat the printer.
     """
     import math
@@ -158,14 +159,14 @@ def live_rc15_upgrade_safe(home, status_reader=None, python_check=None):
     sd = status.get('virtual_sdcard')
     require(isinstance(sd, dict) and sd.get('is_active') is False,
             'Virtual-SD active or unknown; installation refused')
-    # A selected file in an error/unknown state together with retry/in-progress
-    # markers may still be recoverable. Do not discard that held context.
-    # Completed/cancelled/standby print states cannot be resumed as an active
-    # protected print by the current RC15 recovery state machine.
+    # The user may have old, latched state. It is only *stale* when there
+    # is no selected file to recover and the last print is terminal. An ERROR
+    # state is deliberately not assumed terminal while recovery is latched.
+    # Never clear a selected/held print or throw away a possible resume token.
     selected = bool(sd.get('file_path') or sd.get('filename'))
     state = str(print_stats.get('state', '')).lower()
-    if (stale['auto_xy_v2_retry_available'] or stale['auto_xy_v2_in_progress']):
-        require(state in ('standby', 'complete', 'cancelled') or not selected,
+    if any(stale.values()):
+        require(not selected and state in ('standby', 'complete', 'cancelled'),
                 'Possible held RC15 print/retry context; cancel or inspect before upgrade')
     toolhead = status.get('toolhead')
     require(isinstance(toolhead, dict) and
