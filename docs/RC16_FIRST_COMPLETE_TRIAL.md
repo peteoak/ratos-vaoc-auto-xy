@@ -12,6 +12,46 @@ The installer performs source verification, known-install recognition, Klipper/R
 
 **Important:** If the printer has an unknown partially installed AutoXY or an ongoing print/VAOC session, a refusal is a safety condition, not a request to manually bypass safeguards. The installer cannot guarantee compatibility with an unreviewed vendor change.
 
+## SSH safety and installer logging
+
+**Do not enter `set -euo pipefail` directly in an interactive SSH session.**
+A failed download, failed preflight or unsuccessful restart verification can then
+end the user's SSH shell immediately, appearing as a printer disconnection.
+The installer itself requests a **Klipper service restart only**, not an OS reboot.
+
+For a future trial, launch the entire installer in a **child Bash process**
+and tee its output to a persistent log. The parent SSH shell must remain
+interactive when the child exits unsuccessfully. The log must capture curl,
+archive extraction, source verification, preflight, installation and rollback:
+
+```bash
+bash -c '
+set -euo pipefail
+src="$(mktemp -d /tmp/autoxy-rc16.XXXXXX)"
+trap '\''rm -rf "$src"'\'' EXIT
+curl -fsSL --retry 3 "https://api.github.com/repos/peteoak/ratos-vaoc-auto-xy/tarball/REPLACE_WITH_FROZEN_COMMIT" |
+  tar -xz -C "$src" --strip-components=1
+python3 "$src/scripts/rc16_release_install.py" install
+' 2>&1 | tee "$HOME/autoxy-rc16-install.log"
+printf 'Installer child exit code: %d\n' "${PIPESTATUS[0]}"
+```
+
+The command above is **a template only**, not a printer-ready installation
+instruction: replace the placeholder with the reviewed frozen commit and
+qualify recovery from the observed SSH failure before attempting another
+installation. Never enable the shell's `errexit` option in the parent SSH
+terminal. Do not immediately rerun the installation to diagnose an unexplained
+disconnect.
+
+After reconnecting, collect read-only diagnostics:
+```bash
+printf '\nBOOT\n'; uptime; who -b
+printf '\nSERVICES\n'; systemctl is-active ssh klipper
+printf '\nRC16 INCLUDE\n'; grep -nF 'auto_xy_rc16.cfg' "$HOME/printer_data/config/printer.cfg" || true
+printf '\nKLIPPER LOG\n'; tail -n 40 "$HOME/printer_data/logs/klippy.log" 2>/dev/null || true
+printf '\nROLLBACK SNAPSHOTS\n'; ls -lt "$HOME/auto_xy/rollbacks" 2>/dev/null | head -n 10
+```
+
 ## No piecemeal installation
 
 One package includes:
