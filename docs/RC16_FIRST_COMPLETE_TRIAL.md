@@ -52,6 +52,39 @@ printf '\nKLIPPER LOG\n'; tail -n 40 "$HOME/printer_data/logs/klippy.log" 2>/dev
 printf '\nROLLBACK SNAPSHOTS\n'; ls -lt "$HOME/auto_xy/rollbacks" 2>/dev/null | head -n 10
 ```
 
+## Migration of previously latched RC15 flags
+
+An *existing* RC15 AutoXY installation is normally enabled. The upgrade
+does not ask the operator to switch off AutoXY or delete saved variables.
+
+When the printer is confirmed idle and cool, no virtual-SD file is selected,
+and there is no held/paused print or active native VAOC, an old latched
+AutoXY fault, in-progress marker or retry token is treated as **stale state**.
+The one-command active installer:
+
+1. Reads the original enable/measure-only/fault/in-progress/retry flags and
+   the exact existing RatOS XYZ saved offsets.
+2. Archives that original state in the transaction's rollback directory
+   **before changing any flag**; all printer config and installed sources
+   remain backed up by the same installation transaction.
+3. Installs RC16, restarts Klipper and checks that saved state and offsets
+   have not changed during preparation.
+4. Rechecks that no print is selected or in progress, then clears **only**
+   obsolete AutoXY fault/retry/in-progress markers.
+5. Enables active automatic correction through the reviewed AutoXY macro,
+   checks runtime handoff readiness and preserves all saved XYZ offsets.
+6. If a verification or state reset step fails, rolls back the installation
+   and directly restores the original saved flag values, even if the old
+   controller's normal enable macro would refuse a latched fault.
+
+This never silently resumes or discards an uncertain held print.
+Physical motion, active heating, a selected print with stale recovery markers,
+or an unknown controller version still causes a safe preflight refusal.
+
+The installer is intentionally more conservative than a simple
+`SAVE_VARIABLE ... VALUE=0` script, because the latter loses the diagnostic
+and cannot restore the original state if a restart or upgrade fails.
+
 ## No piecemeal installation
 
 One package includes:
