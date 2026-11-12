@@ -101,3 +101,115 @@ def plan_existing_gate(home):
             'gate_config_changed': updated != current,
             'gate_config_bytes': updated.encode('utf-8'),
             'handoff_config_bytes': active_handoff_config(home).encode('utf-8')}
+
+
+def live_rc15_upgrade_safe(home, status_reader=None, python_check=None):
+    """Read-only RC15->RC16 preflight, distinct from RC15 *fresh/rollback*.
+
+    A healthy installed RC15 may already have auto_xy_v2_enabled=1. That is
+    the expected running configuration and MUST NOT block an active upgrade.
+    Fault, in-progress and retry markers still block migration. This function
+    does not issue G-code, change saved variables or move/heat the printer.
+    """
+    import math
+    import subprocess
+    import install_autoxy as baseline
+
+    home = Path(home)
+    reader = status_reader if status_reader is not None else baseline.moonraker_status
+    status, info = reader()
+
+    def require(ok, message):
+        if not ok:
+            raise MigrationError(message)
+
+    require(isinstance(info, dict) and info.get('state') == 'ready',
+            'Klipper must be Ready for RC15 upgrade')
+    require(isinstance(status, dict), 'Moonraker status unavailable')
+    save = status.get('save_variables')
+    require(isinstance(save, dict) and isinstance(save.get('variables'), dict),
+            'Saved AutoXY state unavailable')
+    variables = save['variables']
+
+    def flag(name):
+        return str(variables.get(name, 0)).strip().lower() in ('1', '1.0', 'true')
+
+    # Legacy RC7 fault and in_progress records can be inert after the
+    # documented clean RC15 migration. Never clear them automatically.
+    for key in ('auto_xy_enabled', 'auto_xy_retry_available'):
+        require(not flag(key), 'Legacy AutoXY remains enabled or held: ' + key)
+
+    # Do NOT reject auto_xy_v2_enabled or auto_xy_v2_measure_only merely for
+    # being set. The active installer snapshots/reconciles those two flags.
+    for key in ('auto_xy_v2_fault', 'auto_xy_v2_in_progress',
+                'auto_xy_v2_retry_available'):
+        require(not flag(key),
+                'Unresolved RC15 calibration/recovery state: ' + key)
+
+    vaoc = status.get('gcode_macro _VAOC')
+    require(isinstance(vaoc, dict) and vaoc.get('is_started') is False,
+            'Exit native RatOS VAOC before installation')
+    print_stats = status.get('print_stats')
+    require(isinstance(print_stats, dict) and
+            str(print_stats.get('state', '')).lower() in
+            ('standby', 'complete', 'cancelled', 'error'),
+            'Print active or state unknown; installation refused')
+    sd = status.get('virtual_sdcard')
+    require(isinstance(sd, dict) and sd.get('is_active') is False,
+            'Virtual-SD active or unknown; installation refused')
+    toolhead = status.get('toolhead')
+    require(isinstance(toolhead, dict) and
+            math.isfinite(float(toolhead.get('velocity', float('nan')))) and
+            float(toolhead.get('velocity', float('nan'))) == 0.,
+            'Printer is moving or toolhead velocity unknown')
+
+    for heater in ('extruder', 'extruder1', 'heater_bed'):
+        obj = status.get(heater)
+        require(isinstance(obj, dict), 'Missing heater status: ' + heater)
+        try:
+            target = float(obj.get('target', float('nan')))
+            measured = float(obj.get('temperature', float('nan')))
+        except (ValueError, TypeError) as exc:
+            raise MigrationError('Invalid heater status: ' + heater) from exc
+        require(math.isfinite(target) and math.isfinite(measured) and
+                target == 0. and measured < 50.,
+                'Heater must be cool with target 0: ' + heater)
+
+    config = status.get('configfile')
+    require(isinstance(config, dict) and isinstance(config.get('settings'), dict),
+            'Klipper configuration status unavailable')
+    settings = config['settings']
+    names = baseline.require_ratos_components(settings)
+    require('auto_xy_gate' in names, 'Existing RC15 gate not loaded')
+    gate = settings.get('auto_xy_gate', {})
+    require(isinstance(gate, dict) and gate.get('worker') ==
+            str(home / 'auto_xy/vision/auto_xy_vision_worker.py'),
+            'Installed RC15 vision worker path differs; manual review needed')
+
+    interpreter = home / 'auto-xy-venv/bin/python'
+    require(interpreter.is_file() and not interpreter.is_symlink(),
+            'AutoXY camera Python environment missing')
+    check = (python_check if python_check is not None else
+             lambda command: subprocess.run(command, capture_output=True,
+                                            text=True, timeout=12))
+    try:
+        result = check([str(interpreter), '-c',
+                        'import cv2, numpy; print(cv2.__version__, numpy.__version__)'])
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise MigrationError('AutoXY camera Python environment could not be checked') from exc
+    require(result.returncode == 0,
+            'AutoXY camera environment missing OpenCV/NumPy')
+
+    offsets = {}
+    for key in ('idex_xoffset', 'idex_yoffset', 'idex_zoffset'):
+        require(key in variables, 'Required saved RatOS offset missing: ' + key)
+        try:
+            numeric = float(variables[key])
+        except (ValueError, TypeError) as exc:
+            raise MigrationError('Invalid saved RatOS offset: ' + key) from exc
+        require(math.isfinite(numeric),
+                'Nonfinite saved RatOS offset: ' + key)
+        offsets[key] = variables[key]
+    return {'existing_enabled': flag('auto_xy_v2_enabled'),
+            'measure_only': flag('auto_xy_v2_measure_only'),
+            'saved_offsets': offsets}
