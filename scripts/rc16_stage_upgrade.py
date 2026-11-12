@@ -39,7 +39,7 @@ SOURCES = {
     'auto_xy/vision/auto_xy_commission_candidates_rc16.py':
         ('src/auto_xy_commission_candidates_rc16.py', '27028efe316511ddce869685491b8228005e20ce'),
     'auto_xy/vision/auto_xy_reference_signature_rc16.py':
-        ('src/auto_xy_reference_signature_rc16.py', '021799053569ef4780c74ae6d6756ccd74f00ba0'),
+        ('src/auto_xy_reference_signature_rc16.py', 'a6ab2cfb55483d5b41c5e408b37c00e23ce95447'),
     'auto_xy/vision/auto_xy_vision_worker.py':
         ('src/auto_xy_vision_worker_rc16.py', 'eb11b30bafeee1f88bc44ffba10c6c73741b1a0b'),
     'auto_xy/workers/rc16_recommission_worker.py':
