@@ -149,55 +149,52 @@ One package includes:
 - protected active T0/T1 reference photographs; superseded reference generation and abandoned-session 30-day cleanup
 - exact transactional rollback snapshots and status verification
 
-## Mandatory native VAOC alignment before RC16 reference capture
+## Required nozzle alignment during RC16 reference-image commissioning
 
-**Do not capture or save RC16 nozzle reference images until native RatOS VAOC
-has been used to establish and confirm the correct physical XY alignment of
-T0 and T1.** Merely seeing both nozzles inside the camera window, or taking
-a photograph of each nozzle, is **not** sufficient. Commissioning records
-images of an already correctly aligned nozzle arrangement; it does **not**
-perform, calculate, write or save nozzle XY offset corrections.
+**While carrying out the RC16 Recommission Nozzles workflow, align/position each
+nozzle accurately in the native RatOS VAOC camera window immediately before
+capturing that nozzle's reference photographs.** This is part of the same
+workflow, **not a separate VAOC procedure to perform beforehand**. Merely
+having the nozzle visible somewhere in the window is not sufficient.
 
-In Mainsail, while the printer is idle, no print is held/paused, and nozzle
-temperatures meet the camera-safe limits:
+In Mainsail, with the printer idle, no held or paused print, and temperatures
+within the camera-safe limits:
 
-1. Run `AUTO_XY_RECOMMISSION_NOZZLES` to enter **native RatOS VAOC**.
-   Follow its normal homing, tool positioning and alignment procedures.
-2. Use native VAOC controls to establish the correct XY relationship between
-   T0 and T1. Confirm this **actual nozzle-to-nozzle alignment** using the
-   normal native VAOC procedure; perform/save any necessary offset
-   corrections through native VAOC itself, not through the RC16 reference
-   capture or Save action.
-3. For each tool, position its nozzle accurately at the VAOC camera
-   reticle/crosshair before capture. The RC16 commissioning ambiguity
-   resolver assumes a reticle **at the centre of the full camera frame**;
-   if your reticle is elsewhere, do not force ambiguous captures or
-   treat a successful image capture as proof of alignment.
-4. Once alignment is correct, use `AUTO_XY_RECOMMISSION_T0` followed by
-   `AUTO_XY_RECOMMISSION_CAPTURE_T0`. Confirm the capture has completed
-   and that T0 has **3/3** fresh full-frame photographs.
-5. Select `AUTO_XY_RECOMMISSION_T1`, confirm its native VAOC positioning
-   and correct alignment, then use `AUTO_XY_RECOMMISSION_CAPTURE_T1`.
-   Confirm T1 also has **3/3** images.
-6. Use `AUTO_XY_RECOMMISSION_SAVE` **only after** correct physical alignment
-   has been confirmed and both image groups are captured. Wait for the
-   published/saved confirmation, then run
-   `AUTO_XY_RECOMMISSION_FINISH` to close VAOC.
+1. Select `AUTO_XY_RECOMMISSION_NOZZLES`. This opens native RatOS VAOC;
+   use its normal controls to home and position the tools as required.
+2. Select `AUTO_XY_RECOMMISSION_T0`. **Use native VAOC positioning/alignment
+   controls to place T0 accurately at the correct camera reticle/crosshair,
+   as for normal VAOC alignment.** Once positioned, select
+   `AUTO_XY_RECOMMISSION_CAPTURE_T0`. Wait for capture to finish and
+   confirm T0 shows **3/3** reference images.
+3. Select `AUTO_XY_RECOMMISSION_T1`. **Using native VAOC, accurately align/
+   position T1 to the same intended reference/crosshair location and confirm
+   its correct XY relationship to T0 before capturing.** Then select
+   `AUTO_XY_RECOMMISSION_CAPTURE_T1`. Wait for T1 to show **3/3**.
+4. Only after both tools have been aligned/positioned correctly **during
+   those capture steps** should you select `AUTO_XY_RECOMMISSION_SAVE`.
+   Wait for confirmation that references were published; select
+   `AUTO_XY_RECOMMISSION_FINISH` to close native VAOC.
 
-If either nozzle is misaligned, return to native VAOC alignment **before**
-saving references. If capture or validation fails, do not bypass the
-failure or publish guessed reference centres; retain the previous profile
-and correct the camera/positioning issue. An RC16 `Recommission saved`
-message confirms the *reference profile* was published, **not** that
-native VAOC alignment is correct or that offsets were adjusted. Nozzle
-alignment must be established separately and the subsequent supervised
-protected-print test must still verify automatic correction.
+The RC16 ambiguity resolver assumes the native VAOC reticle is at the
+**centre of the full camera frame**. If the displayed reticle is elsewhere,
+do not force an ambiguous capture. If a nozzle is not positioned or aligned
+correctly, correct it **while still in the recommissioning workflow**, then
+capture its images again before saving.
+
+**Important distinction:** `AUTO_XY_RECOMMISSION_SAVE` publishes the
+camera-reference photographs and profile; it does **not** write or adjust
+saved XY nozzle offsets. The operator's accurate native-VAOC positioning
+during the capture workflow is what makes the references meaningful.
+A successful `Recommission saved` message is not, by itself, proof that
+nozzle XY correction has been verified. Confirm automatic alignment
+subsequently with a supervised protected two-tool print.
 
 ## Supervised sequence — one install, then test the complete solution
 
 1. Run exactly one fully active installation on an idle/cool machine, preferably in a supervised session with SSH and Mainsail visible. Collect the installation receipt and confirm READY.
 2. Verify status panel entries and macro availability: Recommission Nozzles, T0/T1 capture, Save, Finish, Cancel, temperature selector and native manual VAOC.
-3. **First establish correct T0/T1 physical XY alignment using native VAOC, then capture the RC16 reference images** following the mandatory procedure above. Record six reference JPEGs and independent T0/T1 centres/radii/signatures; the previous profile remains recoverable. Do not confuse successful image publication with nozzle-offset calibration.
+3. **During RC16 nozzle recommissioning**, use native VAOC to accurately position/align each tool at the camera reticle **immediately before its reference-image capture** (T0, then T1), following the procedure above. Record six reference JPEGs and the separate T0/T1 centres/radii/signatures; the previous profile remains recoverable. Saving the images is not a nozzle-offset correction.
 4. Verify normal single-tool and COPY/MIRROR prints bypass nozzle XY calibration.
 5. Start a small independent two-tool print. Confirm fresh homing after motor disable, normal RatOS bed heatsoak, camera measurements before Beacon and extrusion, bounded correction and verification.
 6. Perform another independent print after motors disable. Confirm fresh alignment; do not reuse prior measurements even if legacy reuse opt-in persisted.
