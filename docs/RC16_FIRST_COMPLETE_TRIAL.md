@@ -203,6 +203,40 @@ subsequently with a supervised protected two-tool print.
 9. Confirm automatic idle cleanup protects the currently referenced six JPEGs, retains old generations for 30 days, and never removes a selected/paused generated G-code file.
 10. Review logs, actual X/Y accuracy, nozzle shape reliability, camera load on Pi 4 and recovery prompt responsiveness before accepting the build as release qualified.
 
+## RC16 tolerant nozzle likeness update (supervised candidate)
+
+The RC16 photographic reference is a **geometric aid**, not a requirement
+that the hot nozzle reproduce the exact lighting and centre-face appearance
+of its clean commissioning photograph. A supervised trial showed that
+ordinary possible filament ooze can obscure the centre while the nozzle rim
+is still found consistently. Rejecting solely because the six-band full-face
+appearance score changed defeats the purpose of reference-assisted detection.
+
+The updated camera verifier uses the existing `radial-v1` reference format
+but compares the **outer rim's normalised radial structure** rather than
+the entire centre face. The original, independent coarse annular locator,
+unique full-resolution Hough circle, commissioned position/radius limits
+and capture consistency checks **remain mandatory**. The full-face
+difference is retained as a diagnostic rather than a hard rejection.
+A missing, flat, optically incompatible or ambiguously located rim must
+still be rejected. This change does not enlarge the XY calibration
+tolerance, change offsets, ignore detector failures or require capturing
+new commissioning references.
+
+An existing RC16 installation must NOT be rerun through the RC15-to-RC16
+release installer. Instead, `scripts/rc16_vision_refresh.py check` and
+`install` perform an **exact-source, idle-only, single-file transaction**
+on the installed camera signature verifier. It creates a rollback snapshot,
+restarts Klipper once and verifies native protected-print guards, restoring
+the original verifier and restarting on a failed transaction.
+Recommissioned profile images and saved offsets are unchanged.
+
+After a recovered manual VAOC session, the persistent AutoXY enabled flag
+may still be OFF. The refresh readiness check intentionally allows this;
+**the operator must explicitly enable AutoXY** using `AUTO_XY_ON` when
+ready for the next supervised protected-print test, after confirming
+no recovery/fault remains pending.
+
 ## Explicit limits before qualification
 
 - Hardware accuracy, Pi 4 resource load, actual RatOS registered command ownership, native VAOC recovery behaviour and rollback after real Klipper startup failure cannot be proven by GitHub CI.
