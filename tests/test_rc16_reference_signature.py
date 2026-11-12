@@ -54,6 +54,37 @@ class ReferenceSignatureTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'differs'):
             rc16_signatures.compare(altered,(600.,440.),146.,reference)
 
+    def test_hot_nozzle_with_central_ooze_keeps_outer_rim_match(self):
+        # Model hot ooze obscuring the centre, not the outer Hough rim.
+        reference=rc16_signatures.signature_from_frames(
+            self.paths,[(600.,440.,146.)]*3)
+        noisy=Path(self.temp.name)/'oozing.png'
+        original=cv2.imread(str(self.paths[1]),cv2.IMREAD_GRAYSCALE)
+        cv2.circle(original,(600,440),115,5,-1)
+        cv2.imwrite(str(noisy),original)
+        evidence=rc16_signatures.compare(
+            noisy,(600.,440.),146.,reference)
+        self.assertTrue(evidence['matched'])
+        self.assertEqual(evidence['method'],'outer-rim-v1')
+
+    def test_flat_or_missing_outer_rim_is_rejected(self):
+        reference=rc16_signatures.signature_from_frames(
+            self.paths,[(600.,440.,146.)]*3)
+        flat=Path(self.temp.name)/'flat.png'
+        cv2.imwrite(str(flat),
+                    np.full((900,1200),80,dtype=np.uint8))
+        with self.assertRaisesRegex(ValueError,'contrast'):
+            rc16_signatures.compare(flat,(600.,440.),146.,reference)
+
+    def test_existing_commissioned_signature_format_is_preserved(self):
+        reference=rc16_signatures.signature_from_frames(
+            self.paths,[(600.,440.,146.)]*3)
+        self.assertEqual(reference['format'],'radial-v1')
+        evidence=rc16_signatures.compare(
+            self.paths[1],(600.,440.),146.,reference)
+        self.assertTrue(evidence['matched'])
+        self.assertIn('full_face_difference_diagnostic',evidence)
+
     def test_vision_worker_only_checks_signature_after_tuned_hough(self):
         source=(ROOT/'src/auto_xy_vision_worker_rc16.py').read_text()
         self.assertLess(source.index('circle = detect('),
