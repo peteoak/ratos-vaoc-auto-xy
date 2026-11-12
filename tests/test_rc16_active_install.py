@@ -57,6 +57,9 @@ class ActiveInstallerTests(unittest.TestCase):
         self.real_saved_state = installer.saved_state
         self.real_read_migration_state = installer.read_migration_state
         self.real_restore = installer.restore_saved_state
+        readiness_guard = patch.object(installer, 'wait_for_klipper_ready')
+        readiness_guard.start()
+        self.addCleanup(readiness_guard.stop)
         self.mock_original_state = {
             'flags': {key: 0 for key in installer.MIGRATED_FLAGS},
             'offsets': {'idex_xoffset': -0.1,
@@ -376,6 +379,49 @@ class ActiveInstallerTests(unittest.TestCase):
         tty.assert_called_once_with('/dev/tty', 'rb')
         self.assertEqual(run.call_args.args[0], ('sudo', '-v'))
         self.assertNotIn('-n', run.call_args.args[0])
+
+
+    def test_wait_for_ready_retries_503_until_connected(self):
+        from urllib.error import HTTPError
+        status = {'result': {'status': {
+            'save_variables': {'variables': {'auto_xy_v2_enabled': 1}}}}}
+        replies = iter([
+            HTTPError(installer.INFO_URL, 503,
+                      'Klippy Host not connected', {}, None),
+            {'result': {'state': 'startup'}},
+            {'result': {'state': 'ready'}},
+            status,
+        ])
+        def answer(url):
+            value = next(replies)
+            if isinstance(value, Exception):
+                raise value
+            return value
+        with patch.object(installer, 'query_json', side_effect=answer) as query:
+            installer.wait_for_klipper_ready(timeout=10, sleep=lambda _: None)
+        self.assertEqual(query.call_count, 4)
+
+    def test_wait_for_ready_rejects_klipper_shutdown(self):
+        with patch.object(installer, 'query_json',
+                          return_value={'result': {
+                              'state': 'shutdown',
+                              'state_message': 'simulated config failure'}}):
+            with self.assertRaisesRegex(installer.InstallationError,
+                                        'simulated config failure'):
+                installer.wait_for_klipper_ready(timeout=1, sleep=lambda _: None)
+
+    def test_wait_for_ready_requires_saved_variables(self):
+        sequence = iter([
+            {'result': {'state': 'ready'}},
+            {'result': {'status': {'save_variables': {}}}},
+            {'result': {'state': 'ready'}},
+            {'result': {'status': {'save_variables': {
+                'variables': {'auto_xy_v2_enabled': 1}}}}},
+        ])
+        with patch.object(installer, 'query_json',
+                          side_effect=lambda _: next(sequence)) as query:
+            installer.wait_for_klipper_ready(timeout=10, sleep=lambda _: None)
+        self.assertEqual(query.call_count, 4)
 
 
 if __name__ == '__main__':
