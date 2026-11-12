@@ -59,7 +59,7 @@ class RC15UpgradePreflightTests(unittest.TestCase):
         custom.parent.mkdir(parents=True)
         custom.write_text('executable placeholder')
         (self.home/'printer_data/config/auto_xy.cfg').write_text(
-            '[auto_xy_gate]\\npython: '+str(custom)+'\\n')
+            '[auto_xy_gate]\npython: '+str(custom)+'\n')
         self.status['configfile']['settings']['auto_xy_gate']['python'] = str(custom)
         result = self.inspect()
         self.assertEqual(result['vision_python'],str(custom))
