@@ -1,0 +1,60 @@
+# AutoXY RC16 — supervised integration status (November 2026)
+
+RC16 integrates native RatOS print-start protection, camera-guided T0/T1
+recommissioning, automatic image retention, and guarded native VAOC manual
+recovery when automatic alignment cannot safely complete.
+
+This is an **integrated supervised release candidate**, not a production
+release approved for unattended two-tool printing.
+
+## Hardware evidence so far
+
+- Full active installer and initial Klipper/RatOS runtime preflight completed.
+- Both nozzle references saved in native VAOC, three original full-frame
+  photographs each, with an integrity check of all six JPEGs.
+- One automatically gated print failed at T0 photographic appearance matching.
+  RC16 held the protected print, and native VAOC manual recovery succeeded.
+- The too-strict full-face appearance check was revised to a tolerant
+  *outer-rim likeness check* without changing the geometric Hough alignment,
+  commissioned circle limits or XY correction mathematics. Offline tests
+  and GitHub CI passed.
+- A subsequent supervised automatic calibration with similar T0 ooze
+  completed with one offset adjustment and two independent verifications.
+
+These observations are not proof of every error path, physical nozzle
+accuracy on every printer, or unattended reliability. Established XY
+correction and convergence testing from earlier candidates is not repeated
+solely because the optical appearance check changed.
+
+## Remaining release qualification
+
+1. **Responsive standard Mainsail Pause/Cancel during calibration** remains
+   unresolved. The synchronous calibration command owns the G-code queue;
+   normal Pause/Cancel requests can be delayed. Klipper Emergency Stop
+   is a separate non-resumable shutdown. See
+   [the required asynchronous architecture](RC16_PAUSE_CANCEL_INTEGRATION_DESIGN.md).
+2. **Automatic idle retention:** the soft global image quota and protections
+   for active runs, reference images, changed reports and generated-print
+   files have offline tests. Verify that scheduled execution and its storage
+   totals behave correctly on the target Pi.
+3. **Difficult beta nozzle scenes:** original unannotated images, not
+   screenshots containing detector overlays, are needed to establish
+   correct circle choice when more than one candidate is present.
+4. **Release packaging and qualification:** keep RC15's signed package
+   manifest and README *unchanged*. The new RC16 release needs its own
+   pinned source manifest, documentation landing page, publishable version
+   and supervised operational signoff; do not merge or tag a fully
+   qualified release while the above conditions remain unresolved.
+
+## Installation and operator information
+
+Existing RC16 must not be overwritten by the old RC15 or fresh RC16
+installer. The reviewed RC16 likeness update has its own
+`scripts/rc16_vision_refresh.py` read-only check and transactional
+idle-only one-file refresh. No new nozzle commissioning is required for
+that update. Follow the
+[first supervised trial documentation](RC16_FIRST_COMPLETE_TRIAL.md)
+for operator workflow and limitations.
+
+The original RC15 README remains exactly as published and is included in
+its integrity manifest. Do not rewrite it as part of an RC16 document update.
