@@ -178,8 +178,8 @@ def check_installation(home, repo, live):
     if live:
         require(home == HOME, 'Live staging requires canonical /home/pi')
         # This is the read-only RC15 Moonraker/VAOC/temperature preflight.
-        import install_autoxy
-        install_autoxy.live_safe(home, 'rollback')
+        import rc16_active_migration as migration
+        migration.live_rc15_upgrade_safe(home)
         import ratos_extension
         snapshot = ratos_extension.snapshot(home)
         require(snapshot['registered'] == str(installed) and
