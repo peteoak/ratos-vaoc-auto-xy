@@ -7,6 +7,8 @@ until RC16's physical qualification and native print interception tests pass.
 """
 import argparse
 import json
+import os
+import math
 import subprocess
 import sys
 import time
@@ -28,6 +30,18 @@ class InstallationError(RuntimeError):
     pass
 
 
+MIGRATED_FLAGS = (
+    'auto_xy_v2_enabled', 'auto_xy_v2_measure_only',
+    'auto_xy_v2_fault', 'auto_xy_v2_in_progress',
+    'auto_xy_v2_retry_available', 'auto_xy_v2_retry_used',
+)
+SAFETY_FLAGS = (
+    'auto_xy_v2_fault', 'auto_xy_v2_in_progress',
+    'auto_xy_v2_retry_available', 'auto_xy_v2_retry_used',
+)
+MIGRATION_ARCHIVE = 'pre-rc16-saved-state.json'
+
+
 def restart_klipper():
     subprocess.run(RESTART_COMMAND, check=True, timeout=45,
                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -40,10 +54,10 @@ def query_json(url):
 
 def post_gcode(script):
     """Post only fixed, reviewed housekeeping macros to Moonraker."""
-    allowed = ('AUTO_XY_ON',
-               'SAVE_VARIABLE VARIABLE=auto_xy_v2_enabled VALUE=0',
-               'SAVE_VARIABLE VARIABLE=auto_xy_v2_measure_only VALUE=0',
-               'SAVE_VARIABLE VARIABLE=auto_xy_v2_measure_only VALUE=1')
+    allowed = {'AUTO_XY_ON'}
+    for key in MIGRATED_FLAGS:
+        for value in (0, 1):
+            allowed.add('SAVE_VARIABLE VARIABLE=%s VALUE=%d' % (key, value))
     if script not in allowed:
         raise InstallationError('Disallowed installer G-code')
     data = json.dumps({'script': script}).encode('utf-8')
@@ -56,23 +70,97 @@ def post_gcode(script):
         raise InstallationError('Klipper rejected AutoXY installation command')
 
 
-def saved_state():
+def read_migration_state():
+    """Read every managed RC15 flag, including latches; never silently discard them."""
     status = query_json(SAVED_URL)['result']['status']
     variables = status.get('save_variables', {}).get('variables', {})
+    if not isinstance(variables, dict):
+        raise InstallationError('Saved AutoXY variables are unavailable')
     if 'auto_xy_v2_enabled' not in variables:
         raise InstallationError('AutoXY saved enabled state missing')
-    for key in ('auto_xy_v2_fault', 'auto_xy_v2_in_progress',
-                'auto_xy_v2_retry_available'):
-        if str(variables.get(key, 0)).strip().lower() not in ('0', '0.0', 'false'):
+    original = {}
+    for key in MIGRATED_FLAGS:
+        raw = str(variables.get(key, 0)).strip().lower()
+        if raw not in ('0', '0.0', 'false', '1', '1.0', 'true'):
+            raise InstallationError('Unexpected saved AutoXY state: ' + key)
+        original[key] = int(raw in ('1', '1.0', 'true'))
+    offsets = {}
+    for key in ('idex_xoffset', 'idex_yoffset', 'idex_zoffset'):
+        if key not in variables:
+            raise InstallationError('Missing saved nozzle offset: ' + key)
+        try:
+            value = float(variables[key])
+        except (TypeError, ValueError) as exc:
+            raise InstallationError('Invalid saved nozzle offset: ' + key) from exc
+        if not math.isfinite(value):
+            raise InstallationError('Nonfinite saved nozzle offset: ' + key)
+        offsets[key] = variables[key]
+    return {'flags': original, 'offsets': offsets}
+
+
+def saved_state():
+    state = read_migration_state()['flags']
+    for key in SAFETY_FLAGS:
+        if state[key]:
             raise InstallationError('AutoXY unresolved state: ' + key)
-    enabled = str(variables['auto_xy_v2_enabled']).strip().lower()
-    measure = str(variables.get('auto_xy_v2_measure_only', 0)).strip().lower()
-    if enabled not in ('0', '0.0', 'false', '1', '1.0', 'true'):
-        raise InstallationError('Unexpected AutoXY enable value')
-    if measure not in ('0', '0.0', 'false', '1', '1.0', 'true'):
-        raise InstallationError('Unexpected AutoXY measure-only value')
-    return (enabled in ('1', '1.0', 'true'),
-            measure in ('1', '1.0', 'true'))
+    return bool(state['auto_xy_v2_enabled']), bool(state['auto_xy_v2_measure_only'])
+
+
+def archive_migration_state(receipt, state):
+    """Durably record previous software state BEFORE resetting any latch."""
+    if not isinstance(state, dict) or set(state.get('flags', {})) != set(MIGRATED_FLAGS):
+        raise InstallationError('Incomplete original AutoXY state; no reset permitted')
+    target = Path(receipt) / MIGRATION_ARCHIVE
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as out:
+            json.dump({'schema': 1, 'state': state}, out, indent=2, sort_keys=True)
+            out.write('\\n')
+            out.flush()
+            os.fsync(out.fileno())
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+
+
+def set_migration_flag(key, value):
+    if key not in MIGRATED_FLAGS or value not in (0, 1):
+        raise InstallationError('Invalid migration state variable')
+    post_gcode('SAVE_VARIABLE VARIABLE=%s VALUE=%d' % (key, value))
+
+
+def reset_stale_flags(original):
+    """Clear only obsolete latches after installation, leaving offsets untouched."""
+    old = original['flags']
+    if any(old[key] for key in SAFETY_FLAGS):
+        # Prior printer state was audited by the RC15 live preflight.
+        # Recheck no file is held and no print is running after Klipper restart.
+        import install_autoxy
+        status, info = install_autoxy.moonraker_status()
+        if info.get('state') != 'ready':
+            raise InstallationError('Klipper unavailable before stale-flag reset')
+        sd = status.get('virtual_sdcard', {})
+        stats = status.get('print_stats', {})
+        if (sd.get('is_active') is not False
+                or sd.get('file_path') or sd.get('filename')
+                or str(stats.get('state', '')).lower()
+                   not in ('standby', 'complete', 'cancelled')):
+            raise InstallationError('Possible held print; refusing stale flag reset')
+    # Commit the one-shot retry/in-progress/fault latches before enabling
+    # normal automatic correction. Any partial failure triggers rollback.
+    for key in SAFETY_FLAGS:
+        if old[key]:
+            set_migration_flag(key, 0)
+
+
+def restore_migration_state(original):
+    """Restore exact prior boolean flags even when RC15 AUTO_XY_ON refuses faults."""
+    if original is None:
+        return
+    for key, value in original['flags'].items():
+        set_migration_flag(key, value)
+    # idex_xyz offsets are never modified by this transaction.
+
 
 
 def activate_persistent_gate(fresh=False):
@@ -104,19 +192,15 @@ def activate_persistent_gate(fresh=False):
 
 
 def restore_saved_state(original):
-    """Restore only the saved flags the installer may have changed."""
+    """Legacy test helper; restoration now uses the full saved-state snapshot."""
     if original is None:
         return
+    if isinstance(original, dict):
+        restore_migration_state(original)
+        return
     desired_enabled, desired_measure = original
-    current_enabled, current_measure = saved_state()
-    if desired_enabled != current_enabled:
-        if desired_enabled:
-            post_gcode('AUTO_XY_ON')
-        else:
-            post_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_enabled VALUE=0')
-    if desired_measure != current_measure:
-        post_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_measure_only VALUE=%d'
-                   % int(desired_measure))
+    set_migration_flag('auto_xy_v2_enabled', int(desired_enabled))
+    set_migration_flag('auto_xy_v2_measure_only', int(desired_measure))
 
 
 def check_active_runtime(timeout=90, sleep=time.sleep):
@@ -181,16 +265,18 @@ def install(home, root, *, live, restart=restart_klipper,
             verify=check_active_runtime):
     """Transactional filesystem migration; automatic service rollback if needed."""
     variant, changes = upgrade.check_active_installation(home, root, live=live)
-    original_flags = saved_state() if live else None
+    original_flags = read_migration_state() if live else None
     receipt = upgrade.stage(home, changes)
     try:
         if live:
+            archive_migration_state(receipt, original_flags)
             restart()
+            # Only after RC16 is loaded, verify the handoff before mutating
+            # any saved flags. An idle no-held-print check still applies.
+            reset_stale_flags(original_flags)
             activate_persistent_gate()
             verify()
     except BaseException as error:
-        # This restores the previous gate, config, printer include and RC16
-        # extras using the transaction's exact content-addressed snapshot.
         try:
             upgrade.rollback(home, receipt, live=False)
             if live:
