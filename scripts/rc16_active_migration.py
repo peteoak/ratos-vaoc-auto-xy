@@ -63,9 +63,37 @@ def preserve_enabled_gate(config_text):
     return ''.join(lines)
 
 
-def active_handoff_config(home):
+def installed_camera_python(home, config_text=None):
+    """Read existing [auto_xy_gate] python path without changing config."""
+    home = Path(home)
+    if config_text is None:
+        config_text = (home / 'printer_data/config/auto_xy.cfg').read_text(encoding='utf-8')
+    inside = False
+    seen_gate = 0
+    paths = []
+    for line in config_text.splitlines():
+        item = line.split('#', 1)[0].strip()
+        if item.startswith('[') and item.endswith(']'):
+            inside = (item.casefold() == '[auto_xy_gate]')
+            if inside:
+                seen_gate += 1
+            continue
+        if inside and ':' in item:
+            key, value = item.split(':', 1)
+            if key.strip().casefold() == 'python':
+                paths.append(value.strip())
+    if seen_gate != 1 or len(paths) > 1:
+        raise MigrationError('Expected one installed AutoXY gate and at most one Python setting')
+    target = Path(paths[0]) if paths else home / 'auto-xy-venv/bin/python'
+    if not target.is_absolute():
+        raise MigrationError('Camera Python path must be absolute')
+    return target
+
+
+def active_handoff_config(home, vision_python=None):
     """Full operating profile, including background generated-file retention."""
     home = Path(home)
+    vision_python = vision_python or home / 'auto-xy-venv/bin/python'
     return ('# RC16 active protected-print handoff.\n'
             '[auto_xy_ratos_handoff_rc16]\n'
             'enabled: True\n'
@@ -80,7 +108,7 @@ def active_handoff_config(home):
             '[include auto_xy_thermal_rc16_macros.cfg]\n'
             '\n[auto_xy_recommission_rc16]\n'
             'worker: ' + str(home / 'auto_xy/workers/rc16_recommission_worker.py') + '\n'
-            'worker_python: ' + str(home / 'auto-xy-venv/bin/python') + '\n'
+            'worker_python: ' + str(vision_python) + '\n'
             'reference_root: ' + str(home / 'auto_xy/nozzle_references') + '\n'
             'results_root: ' + str(home / 'auto_xy/print_gate_runs') + '\n'
             'profile: ' + str(home / 'auto_xy/camera_commission.json') + '\n')
@@ -100,7 +128,7 @@ def plan_existing_gate(home):
     return {'variant': variant,
             'gate_config_changed': updated != current,
             'gate_config_bytes': updated.encode('utf-8'),
-            'handoff_config_bytes': active_handoff_config(home).encode('utf-8')}
+            'handoff_config_bytes': active_handoff_config(home, installed_camera_python(home, current)).encode('utf-8')}
 
 
 def live_rc15_upgrade_safe(home, status_reader=None, python_check=None,
@@ -219,19 +247,34 @@ def live_rc15_upgrade_safe(home, status_reader=None, python_check=None,
             str(home / 'auto_xy/vision/auto_xy_vision_worker.py'),
             'Installed RC15 vision worker path differs; manual review needed')
 
-    interpreter = home / 'auto-xy-venv/bin/python'
-    require(interpreter.is_file() and not interpreter.is_symlink(),
-            'AutoXY camera Python environment missing')
-    check = (python_check if python_check is not None else
-             lambda command: subprocess.run(command, capture_output=True,
-                                            text=True, timeout=12))
-    try:
-        result = check([str(interpreter), '-c',
-                        'import cv2, numpy; print(cv2.__version__, numpy.__version__)'])
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise MigrationError('AutoXY camera Python environment could not be checked') from exc
-    require(result.returncode == 0,
-            'AutoXY camera environment missing OpenCV/NumPy')
+    interpreter = installed_camera_python(home)
+    configured = gate.get('python', str(home / 'auto-xy-venv/bin/python'))
+    require(str(interpreter) == str(configured),
+            'Camera Python path in live config differs from installed file')
+    standard = home / 'auto-xy-venv'
+    needs_bootstrap = False
+    if not interpreter.is_file():
+        if (interpreter == standard / 'bin/python' and
+                not standard.exists() and not standard.is_symlink()):
+            import vision_env
+            vision_env.host_check()
+            needs_bootstrap = True
+        else:
+            raise MigrationError(
+                'Configured AutoXY camera Python missing: %s; '
+                'existing environments will not be overwritten' % interpreter)
+    else:
+        check = (python_check if python_check is not None else
+                 lambda command: subprocess.run(command, capture_output=True,
+                                                text=True, timeout=12))
+        try:
+            result = check([str(interpreter), '-c',
+                            'import cv2, numpy; print(cv2.__version__, numpy.__version__)'])
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise MigrationError('Configured camera Python could not run: %s' % interpreter) from exc
+        require(result.returncode == 0,
+                'Configured camera Python cannot import OpenCV/NumPy: %s (%s)' %
+                (interpreter, str(getattr(result, 'stderr', ''))[-250:]))
 
     offsets = {}
     for key in ('idex_xoffset', 'idex_yoffset', 'idex_zoffset'):
@@ -246,4 +289,6 @@ def live_rc15_upgrade_safe(home, status_reader=None, python_check=None,
     return {'existing_enabled': flag('auto_xy_v2_enabled'),
             'measure_only': flag('auto_xy_v2_measure_only'),
             'stale_flags': stale,
-            'saved_offsets': offsets}
+            'saved_offsets': offsets,
+            'vision_python': str(interpreter),
+            'vision_bootstrap_required': needs_bootstrap}
