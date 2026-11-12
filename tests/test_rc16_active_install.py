@@ -56,8 +56,14 @@ class ActiveInstallerTests(unittest.TestCase):
         self.real_activate = installer.activate_persistent_gate
         self.real_saved_state = installer.saved_state
         self.real_restore = installer.restore_saved_state
-        saved_guard = patch.object(installer, 'saved_state',
-                                   return_value=(True, False))
+        self.mock_original_state = {
+            'flags': {key: 0 for key in installer.MIGRATED_FLAGS},
+            'offsets': {'idex_xoffset': -0.1,
+                        'idex_yoffset': -0.2,
+                        'idex_zoffset': 0.02}}
+        self.mock_original_state['flags']['auto_xy_v2_enabled'] = 1
+        saved_guard = patch.object(installer, 'read_migration_state',
+                                   return_value=self.mock_original_state)
         activation_guard = patch.object(installer, 'activate_persistent_gate')
         restore_guard = patch.object(installer, 'restore_saved_state')
         for item in (saved_guard, activation_guard, restore_guard):
@@ -264,9 +270,13 @@ class ActiveInstallerTests(unittest.TestCase):
                 installer.check_active_runtime(timeout=2, sleep=lambda _: None)
 
     def test_rollback_restores_original_disabled_flags(self):
+        old = {'flags': dict(self.mock_original_state['flags']),
+               'offsets': dict(self.mock_original_state['offsets'])}
+        old['flags']['auto_xy_v2_enabled'] = 0
+        old['flags']['auto_xy_v2_measure_only'] = 1
         def restore(original):
-            self.assertEqual(original, (False, True))
-        with patch.object(installer, 'saved_state', return_value=(False, True)), \
+            self.assertEqual(original, old)
+        with patch.object(installer, 'read_migration_state', return_value=old), \
              patch.object(installer, 'restore_saved_state', side_effect=restore) as restored:
             with self.assertRaisesRegex(installer.InstallationError,
                                         'prior installation restored'):
@@ -274,7 +284,7 @@ class ActiveInstallerTests(unittest.TestCase):
                                   restart=lambda: None,
                                   verify=lambda: (_ for _ in ()).throw(
                                       installer.InstallationError('injected')))
-            restored.assert_called_once_with((False, True))
+            restored.assert_called_once_with(old)
         self.assert_restored()
 
     def test_preinstall_saved_state_does_not_query_uninstalled_rc16_handoff(self):
@@ -288,7 +298,9 @@ class ActiveInstallerTests(unittest.TestCase):
                 'auto_xy_v2_measure_only': 0,
                 'auto_xy_v2_fault': 0,
                 'auto_xy_v2_in_progress': 0,
-                'auto_xy_v2_retry_available': 0}}}}}
+                'auto_xy_v2_retry_available': 0,
+                'idex_xoffset': -0.1, 'idex_yoffset': -0.2,
+                'idex_zoffset': 0.02}}}}}
         with patch.object(installer, 'query_json', side_effect=response):
             self.assertEqual(self.real_saved_state(), (True, False))
         self.assertEqual(observed, [installer.SAVED_URL])
@@ -296,7 +308,9 @@ class ActiveInstallerTests(unittest.TestCase):
     def test_saved_state_refuses_unresolved_faults(self):
         status = {'save_variables': {'variables': {
             'auto_xy_v2_enabled': 0, 'auto_xy_v2_fault': 1,
-            'auto_xy_v2_measure_only': 0}}}
+            'auto_xy_v2_measure_only': 0,
+            'idex_xoffset': -0.1, 'idex_yoffset': -0.2,
+            'idex_zoffset': 0.02}}}
         with patch.object(installer, 'query_json',
                           return_value={'result': {'status': status}}), \
              patch.object(installer, 'saved_state', wraps=self.real_saved_state):
