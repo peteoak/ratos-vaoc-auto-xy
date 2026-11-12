@@ -1,4 +1,41 @@
-# AutoXY v0.5.0-rc15-dev6 — storage retention release candidate
+# AutoXY — RatOS IDEX nozzle XY calibration
+
+## RC16 integrated supervised candidate (November 2026)
+
+RC16 integrates native RatOS print-start protection, camera-guided T0/T1
+recommissioning, automatic image storage retention, guarded same-file
+recovery using native VAOC, and bounded automatic XY measurement/correction.
+The developer's first supervised hardware trial successfully installed
+RC16, commissioned six full-frame camera references, used native VAOC
+manual recovery after an initial image rejection, and subsequently completed
+automatic calibration with nozzle ooze present (one correction and two
+verification cycles). This is **not yet qualified for unattended printing**.
+
+**Critical operational limitation:** Ordinary Mainsail Pause/Cancel may
+remain queued during synchronous RC16 camera calibration. Use the actual
+Klipper Emergency Stop in an unsafe situation; it shuts down rather than
+pauses, and guarded calibration/print-start must be repeated after recovery.
+See [Pause/Cancel architecture and release acceptance criteria](
+docs/RC16_PAUSE_CANCEL_INTEGRATION_DESIGN.md).
+Do not claim responsiveness from the currently installed RC16 candidate.
+
+**Existing RC16 installations:** The RC15 installer below is NOT an RC16
+upgrade path. The RC16 trial used a pinned, fully transactional installer;
+follow [RC16 first trial and readiness](
+docs/RC16_FIRST_COMPLETE_TRIAL.md). When appropriate, a one-file,
+idle-only camera-likeness refresh is provided by
+`scripts/rc16_vision_refresh.py` and its exact source checks.
+Do not rerun the full RC15-to-RC16 installer over an active RC16 install.
+
+**Outstanding release gates:** asynchronous Pause/Cancel integration and
+hardware validation; end-to-end automatic retention observation on the Pi;
+original unannotated beta-nozzle detector replay; final packaging and
+supervised release qualification. None of the above require revalidating
+the already-tested XY correction mathematics from scratch.
+
+---
+
+## Previous RC15-dev6 release instructions
 
 **Development pre-release** for RatOS 2.1 IDEX, validated on one RatRig V-Core 4 300 IDEX but not across multiple printers. RC15 dev6 adds bounded artifact retention, eliminates the redundant T0 reload immediately after native `_VAOC_START`, and promotes the owner's selected detector and timing defaults. Protected printing remains opt-in until automatic integration is validated.
 
