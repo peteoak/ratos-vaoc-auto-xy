@@ -66,14 +66,24 @@ class RC15UpgradePreflightTests(unittest.TestCase):
         self.saved['auto_xy_v2_enabled'] = 0
         self.assertFalse(self.inspect()['existing_enabled'])
 
-    def test_fault_in_progress_and_retry_all_block(self):
+    def test_stale_flags_are_migratable_when_no_print_is_held(self):
         for key in ('auto_xy_v2_fault','auto_xy_v2_in_progress',
-                    'auto_xy_v2_retry_available'):
+                    'auto_xy_v2_retry_available', 'auto_xy_v2_retry_used'):
             with self.subTest(key=key):
                 self.saved[key]=1
-                with self.assertRaisesRegex(migration.MigrationError,'Unresolved'):
-                    self.inspect()
+                result=self.inspect()
+                self.assertTrue(result['stale_flags'][key])
                 self.saved[key]=0
+
+    def test_stale_flags_block_if_error_or_selected_file_might_be_held(self):
+        self.saved['auto_xy_v2_fault']=1
+        self.status['print_stats']['state']='error'
+        with self.assertRaisesRegex(migration.MigrationError,'held RC15'):
+            self.inspect()
+        self.status['print_stats']['state']='complete'
+        self.status['virtual_sdcard']['file_path']='incomplete_print.gcode'
+        with self.assertRaisesRegex(migration.MigrationError,'held RC15'):
+            self.inspect()
 
     def test_legacy_retry_still_blocks(self):
         self.saved['auto_xy_retry_available']=1
