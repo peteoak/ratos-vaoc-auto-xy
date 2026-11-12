@@ -28,19 +28,23 @@ solely because the optical appearance check changed.
 
 ## Remaining release qualification
 
-1. **Responsive standard Mainsail Pause/Cancel during calibration** remains
-   unresolved. The synchronous calibration command owns the G-code queue;
-   normal Pause/Cancel requests can be delayed. Klipper Emergency Stop
-   is a separate non-resumable shutdown. See
-   [the required asynchronous architecture](RC16_PAUSE_CANCEL_INTEGRATION_DESIGN.md).
-2. **Automatic idle retention:** the soft global image quota and protections
+**Accepted operating limitation — not a release blocker:** The owner
+accepts Klipper's existing G-code queue behaviour: standard Mainsail
+Pause/Cancel may wait until synchronous calibration finishes. In an
+unsafe situation, use **Emergency Stop**, which shuts down Klipper
+and invalidates any active calibration. Do not attempt ordinary Resume
+after an emergency stop; restart with normal homing and the guarded
+calibration sequence. The [optional future asynchronous design](
+RC16_PAUSE_CANCEL_INTEGRATION_DESIGN.md) is archived for reference only.
+
+1. **Automatic idle retention:** the soft global image quota and protections
    for active runs, reference images, changed reports and generated-print
    files have offline tests. Verify that scheduled execution and its storage
    totals behave correctly on the target Pi.
-3. **Difficult beta nozzle scenes:** original unannotated images, not
+2. **Difficult beta nozzle scenes:** original unannotated images, not
    screenshots containing detector overlays, are needed to establish
    correct circle choice when more than one candidate is present.
-4. **Release packaging and qualification:** keep RC15's signed package
+3. **Release packaging and qualification:** keep RC15's signed package
    manifest and README *unchanged*. The new RC16 release needs its own
    pinned source manifest, documentation landing page, publishable version
    and supervised operational signoff; do not merge or tag a fully
