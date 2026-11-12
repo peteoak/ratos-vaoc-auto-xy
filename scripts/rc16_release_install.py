@@ -239,6 +239,10 @@ def main(argv=None):
                     if python == standard / 'bin/python' and not python.is_file():
                         print('NOTICE: Installer will provision missing isolated camera venv from binary wheels')
                 return 0
+            # Sudo must be authorized before ANY printer or venv files change.
+            # The interactive prompt goes directly to the SSH TTY, not the log.
+            if not opts.offline:
+                active.authorize_restart()
             kind, receipt = install_complete_with_vision(home, root, live=not opts.offline)
             print('RC16 single-transaction active installation COMPLETE:', kind)
             print('Rollback snapshot:', receipt)
