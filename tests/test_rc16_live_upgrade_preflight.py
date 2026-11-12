@@ -31,7 +31,8 @@ class RC15UpgradePreflightTests(unittest.TestCase):
             'gcode_macro _VAOC': {'is_started': False},
             'print_stats': {'state': 'complete'},
             'virtual_sdcard': {'is_active': False},
-            'toolhead': {'velocity': 0},
+            'toolhead': {'max_velocity': 300},
+            'motion_report': {'live_velocity': 0},
             'extruder': {'target': 0, 'temperature': 25},
             'extruder1': {'target': 0, 'temperature': 25},
             'heater_bed': {'target': 0, 'temperature': 25},
@@ -104,9 +105,33 @@ class RC15UpgradePreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(migration.MigrationError,'Heater'):
             self.inspect()
         self.status['extruder']['target']=0
-        self.status['toolhead']['velocity']=10
+        self.status['motion_report']['live_velocity']=10
         with self.assertRaisesRegex(migration.MigrationError,'moving'):
             self.inspect()
+
+    def test_missing_toolhead_velocity_is_not_a_motion_failure(self):
+        self.assertNotIn('velocity', self.status['toolhead'])
+        self.assertTrue(self.inspect()['existing_enabled'])
+
+    def test_absent_motion_report_is_checked_separately(self):
+        self.status.pop('motion_report')
+        result = migration.live_rc15_upgrade_safe(
+            self.home, status_reader=self.reader,
+            python_check=self.deps,
+            motion_reader=lambda: {'live_velocity': 0})
+        self.assertTrue(result['existing_enabled'])
+        with self.assertRaisesRegex(migration.MigrationError,
+                                    'live_velocity unknown'):
+            migration.live_rc15_upgrade_safe(
+                self.home, status_reader=self.reader,
+                python_check=self.deps,
+                motion_reader=lambda: {'live_velocity': 16.})
+        with self.assertRaisesRegex(migration.MigrationError,
+                                    'motion_report unavailable'):
+            migration.live_rc15_upgrade_safe(
+                self.home, status_reader=self.reader,
+                python_check=self.deps,
+                motion_reader=lambda: {})
 
     def test_missing_offset_or_wrong_vision_environment_blocks(self):
         del self.saved['idex_zoffset']
