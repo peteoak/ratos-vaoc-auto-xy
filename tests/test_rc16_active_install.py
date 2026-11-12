@@ -343,5 +343,40 @@ class ActiveInstallerTests(unittest.TestCase):
                  'SAVE_VARIABLE VARIABLE=auto_xy_v2_measure_only VALUE=1'])
 
 
+    def test_restart_uses_password_capable_sudo(self):
+        with patch.object(installer.subprocess, 'run') as run:
+            installer.restart_klipper()
+        self.assertEqual(run.call_args.args[0],
+                         ('sudo', 'systemctl', 'restart', 'klipper'))
+        self.assertNotIn('-n', run.call_args.args[0])
+
+    def test_restart_failure_reports_error(self):
+        with patch.object(installer.subprocess, 'run',
+                          side_effect=installer.subprocess.CalledProcessError(
+                              1, 'sudo')) as run:
+            with self.assertRaisesRegex(installer.InstallationError,
+                                        'Klipper service restart failed'):
+                installer.restart_klipper()
+        run.assert_called_once()
+
+    def test_authentication_preflight_refuses_missing_tty(self):
+        with patch('builtins.open', side_effect=OSError('No controlling TTY')), \\
+             patch.object(installer.subprocess, 'run') as run:
+            with self.assertRaisesRegex(installer.InstallationError,
+                                        'no files changed'):
+                installer.authorize_restart()
+        run.assert_not_called()
+
+    def test_authentication_invokes_interactive_sudo_validation(self):
+        from unittest.mock import mock_open
+        with patch('builtins.open', mock_open(read_data='')) as tty, \\
+             patch.object(installer.os, 'isatty', return_value=True), \\
+             patch.object(installer.subprocess, 'run') as run:
+            installer.authorize_restart()
+        tty.assert_called_once_with('/dev/tty', 'rb')
+        self.assertEqual(run.call_args.args[0], ('sudo', '-v'))
+        self.assertNotIn('-n', run.call_args.args[0])
+
+
 if __name__ == '__main__':
     unittest.main()
