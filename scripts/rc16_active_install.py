@@ -22,7 +22,7 @@ INFO_URL = 'http://127.0.0.1:7125/printer/info'
 CONFIG_URL = ('http://127.0.0.1:7125/printer/objects/query?'
               'configfile&auto_xy_ratos_handoff_rc16&auto_xy_recommission_rc16&save_variables')
 SAVED_URL = 'http://127.0.0.1:7125/printer/objects/query?save_variables'
-RESTART_COMMAND = ('sudo', '-n', 'systemctl', 'restart', 'klipper')
+RESTART_COMMAND = ('sudo', 'systemctl', 'restart', 'klipper')
 GCODE_URL = 'http://127.0.0.1:7125/printer/gcode/script'
 
 
@@ -42,9 +42,35 @@ SAFETY_FLAGS = (
 MIGRATION_ARCHIVE = 'pre-rc16-saved-state.json'
 
 
+def authorize_restart():
+    """Obtain sudo authentication from the operator BEFORE modifying files.
+
+    No password is collected by AutoXY or written to installation logs.
+    sudo uses the SSH controlling TTY and its normal credential cache.
+    Refuse a noninteractive session before a rollback could depend on sudo.
+    """
+    try:
+        with open('/dev/tty', 'rb') as tty:
+            if not os.isatty(tty.fileno()):
+                raise InstallationError('Interactive SSH terminal required for sudo')
+            subprocess.run(('sudo', '-v'), stdin=tty, check=True, timeout=120,
+                           stdout=subprocess.DEVNULL)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise InstallationError(
+            'Klipper restart authorization failed. Run from interactive SSH '
+            'and enter your sudo password when prompted; no files changed.'
+        ) from exc
+
+
 def restart_klipper():
-    subprocess.run(RESTART_COMMAND, check=True, timeout=45,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    """Allow sudo to prompt on /dev/tty again if the credential expires."""
+    try:
+        subprocess.run(RESTART_COMMAND, check=True, timeout=120,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise InstallationError(
+            'Klipper service restart failed (sudo or systemctl): %s' % exc
+        ) from exc
 
 
 def query_json(url):
