@@ -57,6 +57,7 @@ class ActiveInstallerTests(unittest.TestCase):
         self.real_saved_state = installer.saved_state
         self.real_read_migration_state = installer.read_migration_state
         self.real_restore = installer.restore_saved_state
+        self.real_wait_for_ready = installer.wait_for_klipper_ready
         readiness_guard = patch.object(installer, 'wait_for_klipper_ready')
         readiness_guard.start()
         self.addCleanup(readiness_guard.stop)
@@ -398,7 +399,7 @@ class ActiveInstallerTests(unittest.TestCase):
                 raise value
             return value
         with patch.object(installer, 'query_json', side_effect=answer) as query:
-            installer.wait_for_klipper_ready(timeout=10, sleep=lambda _: None)
+            self.real_wait_for_ready(timeout=10, sleep=lambda _: None)
         self.assertEqual(query.call_count, 4)
 
     def test_wait_for_ready_rejects_klipper_shutdown(self):
@@ -408,7 +409,7 @@ class ActiveInstallerTests(unittest.TestCase):
                               'state_message': 'simulated config failure'}}):
             with self.assertRaisesRegex(installer.InstallationError,
                                         'simulated config failure'):
-                installer.wait_for_klipper_ready(timeout=1, sleep=lambda _: None)
+                self.real_wait_for_ready(timeout=1, sleep=lambda _: None)
 
     def test_wait_for_ready_requires_saved_variables(self):
         sequence = iter([
@@ -420,7 +421,7 @@ class ActiveInstallerTests(unittest.TestCase):
         ])
         with patch.object(installer, 'query_json',
                           side_effect=lambda _: next(sequence)) as query:
-            installer.wait_for_klipper_ready(timeout=10, sleep=lambda _: None)
+            self.real_wait_for_ready(timeout=10, sleep=lambda _: None)
         self.assertEqual(query.call_count, 4)
 
 
