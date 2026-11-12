@@ -13,6 +13,8 @@ import contextlib
 import fcntl
 import json
 import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -20,6 +22,8 @@ import install_autoxy as baseline
 import ratos_extension
 import rc16_active_install as active
 import rc16_stage_upgrade as upgrade
+import rc16_active_migration as migration
+import vision_env
 
 HOME = Path('/home/pi')
 LOCK = Path('/tmp/autoxy-rc16-install.lock')
@@ -160,6 +164,47 @@ def install_complete(home, root, *, live,
     return variant, receipt
 
 
+def prepare_vision(home, kind, *, live):
+    """Provision only a completely absent standard venv; never overwrite."""
+    if not live:
+        return False
+    standard = Path(home) / 'auto-xy-venv'
+    interpreter = (migration.installed_camera_python(home) if kind == 'upgrade'
+                   else standard / 'bin/python')
+    if interpreter.is_file():
+        if kind == 'fresh':
+            result = subprocess.run([str(interpreter), '-c', 'import cv2,numpy'],
+                                    capture_output=True, text=True, timeout=20)
+            if result.returncode:
+                raise ReleaseInstallError('Existing camera Python cannot import OpenCV/NumPy')
+        return False
+    if interpreter != standard / 'bin/python' or standard.exists() or standard.is_symlink():
+        raise ReleaseInstallError('Camera Python missing/incomplete; refusing overwrite: %s' % interpreter)
+    vision_env.install_new_venv(standard)
+    return True
+
+
+def install_complete_with_vision(home, root, *, live,
+                                 restart=active.restart_klipper,
+                                 verify=active.check_active_runtime,
+                                 activate=None):
+    created = False
+    try:
+        created = prepare_vision(home, install_kind(home), live=live)
+        return install_complete(home, root, live=live, restart=restart,
+                                verify=verify, activate=activate)
+    except BaseException:
+        if created:
+            # An incomplete RC16 transaction may still need the environment.
+            # Clean only after installer restored the previous printer include.
+            cfg = Path(home) / 'printer_data/config/printer.cfg'
+            if cfg.is_file() and 'auto_xy_rc16.cfg' not in cfg.read_text():
+                env = Path(home) / 'auto-xy-venv'
+                if env.is_dir() and not env.is_symlink():
+                    shutil.rmtree(env)
+        raise
+
+
 @contextlib.contextmanager
 def one_installer_only():
     with LOCK.open('a+') as handle:
@@ -187,8 +232,14 @@ def main(argv=None):
             if opts.action == 'check':
                 kind, _, _ = preflight(home, root, live=not opts.offline)
                 print('RC16 full active installation readiness: PASS (%s); no file changes' % kind)
+                if not opts.offline:
+                    standard = home / 'auto-xy-venv'
+                    python = (migration.installed_camera_python(home) if kind == 'upgrade'
+                              else standard / 'bin/python')
+                    if python == standard / 'bin/python' and not python.is_file():
+                        print('NOTICE: Installer will provision missing isolated camera venv from binary wheels')
                 return 0
-            kind, receipt = install_complete(home, root, live=not opts.offline)
+            kind, receipt = install_complete_with_vision(home, root, live=not opts.offline)
             print('RC16 single-transaction active installation COMPLETE:', kind)
             print('Rollback snapshot:', receipt)
             print('Protected print processor and Mainsail recommissioning loaded.')
