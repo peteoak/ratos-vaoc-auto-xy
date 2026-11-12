@@ -55,6 +55,7 @@ class ActiveInstallerTests(unittest.TestCase):
         self.addCleanup(guard.stop)
         self.real_activate = installer.activate_persistent_gate
         self.real_saved_state = installer.saved_state
+        self.real_read_migration_state = installer.read_migration_state
         self.real_restore = installer.restore_saved_state
         self.mock_original_state = {
             'flags': {key: 0 for key in installer.MIGRATED_FLAGS},
@@ -301,7 +302,9 @@ class ActiveInstallerTests(unittest.TestCase):
                 'auto_xy_v2_retry_available': 0,
                 'idex_xoffset': -0.1, 'idex_yoffset': -0.2,
                 'idex_zoffset': 0.02}}}}}
-        with patch.object(installer, 'query_json', side_effect=response):
+        with patch.object(installer, 'query_json', side_effect=response), \
+             patch.object(installer, 'read_migration_state',
+                          wraps=self.real_read_migration_state):
             self.assertEqual(self.real_saved_state(), (True, False))
         self.assertEqual(observed, [installer.SAVED_URL])
 
@@ -313,6 +316,8 @@ class ActiveInstallerTests(unittest.TestCase):
             'idex_zoffset': 0.02}}}
         with patch.object(installer, 'query_json',
                           return_value={'result': {'status': status}}), \
+             patch.object(installer, 'read_migration_state',
+                          wraps=self.real_read_migration_state), \
              patch.object(installer, 'saved_state', wraps=self.real_saved_state):
             with self.assertRaisesRegex(installer.InstallationError,
                                         'unresolved state'):
