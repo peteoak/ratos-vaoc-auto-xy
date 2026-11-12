@@ -120,6 +120,22 @@ installation has `/home/pi/auto-xy-venv/bin/python`.
 This is a single integrated installation path, not a second manual
 environment-install step.
 
+## Klipper restart and Moonraker reconnect handshake
+
+After `systemctl restart klipper` returns, the Klipper service may already be
+running while Moonraker still reports HTTP 503 `Klippy Host not connected`.
+The installer must not treat this normal brief disconnect as a terminal
+installation failure, nor attempt saved-state access during that gap.
+
+The RC16 active upgrade, fresh install and their rollback paths now wait
+up to 120 seconds for a readable `printer/info` in READY state and
+`save_variables` status. Temporary connection errors and 503 responses
+are retried; confirmed Klipper `error` or `shutdown` fails immediately.
+Timeout fails closed and triggers rollback rather than activating correction.
+After rollback, the same reconnect handshake is required before restoring
+archived flags. This does not bypass later runtime and offset integrity checks.
+
+
 ## No piecemeal installation
 
 One package includes:
