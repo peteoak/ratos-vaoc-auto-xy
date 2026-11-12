@@ -127,7 +127,7 @@ class RC15UpgradePreflightTests(unittest.TestCase):
                 python_check=self.deps,
                 motion_reader=lambda: {'live_velocity': 16.})
         with self.assertRaisesRegex(migration.MigrationError,
-                                    'motion_report unavailable'):
+                                    'live_velocity unknown'):
             migration.live_rc15_upgrade_safe(
                 self.home, status_reader=self.reader,
                 python_check=self.deps,
