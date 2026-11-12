@@ -360,7 +360,7 @@ class ActiveInstallerTests(unittest.TestCase):
         run.assert_called_once()
 
     def test_authentication_preflight_refuses_missing_tty(self):
-        with patch('builtins.open', side_effect=OSError('No controlling TTY')), \\
+        with patch('builtins.open', side_effect=OSError('No controlling TTY')), \
              patch.object(installer.subprocess, 'run') as run:
             with self.assertRaisesRegex(installer.InstallationError,
                                         'no files changed'):
@@ -369,8 +369,8 @@ class ActiveInstallerTests(unittest.TestCase):
 
     def test_authentication_invokes_interactive_sudo_validation(self):
         from unittest.mock import mock_open
-        with patch('builtins.open', mock_open(read_data='')) as tty, \\
-             patch.object(installer.os, 'isatty', return_value=True), \\
+        with patch('builtins.open', mock_open(read_data='')) as tty, \
+             patch.object(installer.os, 'isatty', return_value=True), \
              patch.object(installer.subprocess, 'run') as run:
             installer.authorize_restart()
         tty.assert_called_once_with('/dev/tty', 'rb')
