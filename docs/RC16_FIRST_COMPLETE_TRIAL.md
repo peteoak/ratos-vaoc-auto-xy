@@ -85,6 +85,32 @@ The installer is intentionally more conservative than a simple
 `SAVE_VARIABLE ... VALUE=0` script, because the latter loses the diagnostic
 and cannot restore the original state if a restart or upgrade fails.
 
+## Camera Python environment: part of the complete install
+
+The live upgrade uses the exact `python:` interpreter configured in the
+existing `[auto_xy_gate]` section rather than assuming that every RC15
+installation has `/home/pi/auto-xy-venv/bin/python`.
+
+- If that interpreter exists and imports OpenCV/NumPy, its location is preserved
+  for both the calibration controller and Mainsail recommissioning.
+- If only the standard isolated `/home/pi/auto-xy-venv` directory is **entirely
+  absent**, read-only preflight reports a planned provision. The one-command
+  installer may create it using verified, pinned, binary-only NumPy/OpenCV
+  wheels before replacing printer files. If the installer fails and the
+  original printer configuration is restored, the newly created environment
+  is removed.
+- If an existing environment is incomplete, its Python cannot import
+  dependencies, or a custom configured interpreter path is missing, preflight
+  refuses. It never silently overwrites existing environments or installs
+  packages into the system/Klipper Python.
+- Pi architecture/Python wheel availability cannot be established just from a
+  GitHub runner. If compatible binary wheels are unavailable, preparation
+  fails before modifying printer configuration. Do not use pip's source-build
+  fallback on the Pi as a workaround.
+
+This is a single integrated installation path, not a second manual
+environment-install step.
+
 ## No piecemeal installation
 
 One package includes:
