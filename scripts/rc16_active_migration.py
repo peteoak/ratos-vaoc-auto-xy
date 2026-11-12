@@ -139,12 +139,13 @@ def live_rc15_upgrade_safe(home, status_reader=None, python_check=None):
     for key in ('auto_xy_enabled', 'auto_xy_retry_available'):
         require(not flag(key), 'Legacy AutoXY remains enabled or held: ' + key)
 
-    # Do NOT reject auto_xy_v2_enabled or auto_xy_v2_measure_only merely for
-    # being set. The active installer snapshots/reconciles those two flags.
-    for key in ('auto_xy_v2_fault', 'auto_xy_v2_in_progress',
-                'auto_xy_v2_retry_available'):
-        require(not flag(key),
-                'Unresolved RC15 calibration/recovery state: ' + key)
+    # Persisted RC15 fault/retry flags may outlive a failed or interrupted
+    # standalone calibration. They can be archived and reset during the
+    # *complete* RC16 install, but NEVER when a live recovery may be pending.
+    # The installer does not change any saved variable during preflight.
+    stale = {key: flag(key) for key in (
+        'auto_xy_v2_fault', 'auto_xy_v2_in_progress',
+        'auto_xy_v2_retry_available', 'auto_xy_v2_retry_used')}
 
     vaoc = status.get('gcode_macro _VAOC')
     require(isinstance(vaoc, dict) and vaoc.get('is_started') is False,
@@ -157,6 +158,15 @@ def live_rc15_upgrade_safe(home, status_reader=None, python_check=None):
     sd = status.get('virtual_sdcard')
     require(isinstance(sd, dict) and sd.get('is_active') is False,
             'Virtual-SD active or unknown; installation refused')
+    # A selected file in an error/unknown state together with retry/in-progress
+    # markers may still be recoverable. Do not discard that held context.
+    # Completed/cancelled/standby print states cannot be resumed as an active
+    # protected print by the current RC15 recovery state machine.
+    selected = bool(sd.get('file_path') or sd.get('filename'))
+    state = str(print_stats.get('state', '')).lower()
+    if (stale['auto_xy_v2_retry_available'] or stale['auto_xy_v2_in_progress']):
+        require(state in ('standby', 'complete', 'cancelled') or not selected,
+                'Possible held RC15 print/retry context; cancel or inspect before upgrade')
     toolhead = status.get('toolhead')
     require(isinstance(toolhead, dict) and
             math.isfinite(float(toolhead.get('velocity', float('nan')))) and
@@ -212,4 +222,5 @@ def live_rc15_upgrade_safe(home, status_reader=None, python_check=None):
         offsets[key] = variables[key]
     return {'existing_enabled': flag('auto_xy_v2_enabled'),
             'measure_only': flag('auto_xy_v2_measure_only'),
+            'stale_flags': stale,
             'saved_offsets': offsets}
