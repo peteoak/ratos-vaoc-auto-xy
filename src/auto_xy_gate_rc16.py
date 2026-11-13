@@ -1066,10 +1066,58 @@ class AutoXYGate:
                     }
                     if isinstance(snap_start,(int,float)):
                         self._diag_previous_snapshot_started_s=snap_start
+                # Persist the worker's actual photographic decision, even
+                # with optional motion diagnostics disabled. None means an
+                # older worker did not provide the field; never guess zero.
+                photo=data.get('appearance_evidence')
+                if photo is not None and not isinstance(photo,dict):
+                    raise ValueError('Invalid image appearance evidence')
+                http_retries=data.get('camera_http_retries')
+                http_attempts=data.get('camera_http_attempts')
+                http_statuses=data.get('camera_http_retry_statuses')
+                if http_retries is not None and (
+                        type(http_retries) is not int or not 0<=http_retries<=2):
+                    raise ValueError('Invalid camera HTTP retry count')
+                if http_attempts is not None and (
+                        type(http_attempts) is not int or
+                        http_attempts!=http_retries+1):
+                    raise ValueError('Invalid camera HTTP attempt count')
+                if http_statuses is not None and (
+                        not isinstance(http_statuses,list) or
+                        len(http_statuses)!=http_retries or
+                        any(type(x) is not int or x not in (500,502,503,504)
+                            for x in http_statuses)):
+                    raise ValueError('Invalid camera HTTP retry status history')
+                if photo is not None and (
+                        type(photo.get('used_for_selection')) is not bool or
+                        photo.get('matched') is not True):
+                    raise ValueError('Invalid nozzle photo decision evidence')
+                # Aggregate only verified values. Fail-closed camera
+                # semantics are unchanged; a retry does not reuse a JPEG.
+                totals=self.report.setdefault('vision_reliability_summary',{
+                    'accepted_captures':0,'photo_tiebreak_captures':0,
+                    'geometry_only_captures':0,'http_retry_captures':0,
+                    'http_retries_total':0,'worker_retries_total':0})
+                totals['accepted_captures']+=1
+                totals['worker_retries_total']+=attempt
+                if photo is not None:
+                    if photo['used_for_selection']:
+                        totals['photo_tiebreak_captures']+=1
+                    elif photo.get('method')=='geometry-only':
+                        totals['geometry_only_captures']+=1
+                if http_retries is not None:
+                    totals['http_retries_total']+=http_retries
+                    if http_retries:
+                        totals['http_retry_captures']+=1
                 self.record('captures',label=label,tool=self.active,
                             center_px=point,radius_px=data['radius_px'],
                             image=image,sha256=data['sha256'],attempt=attempt+1,
                             registration=data.get('registration'),
+                            appearance_evidence=photo,
+                            camera_http_retries=http_retries,
+                            camera_http_attempts=http_attempts,
+                            camera_http_retry_statuses=http_statuses,
+                            photo_reference_available=data.get('photo_reference_available'),
                             **({'camera_diagnostics':capture_diag} if capture_diag is not None else {}))
                 self.report.setdefault('timings',[]).append(
                     {'kind':'capture','label':label,
