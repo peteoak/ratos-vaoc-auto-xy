@@ -72,6 +72,42 @@ an exact-source, idle-only three-file transaction with rollback snapshot
 and post-restart protection checks. It refuses unreviewed or mixed source
 versions and active/selected prints.
 
+## November 13 capture evidence logging
+
+The RC16 camera worker now supplies the actual accepted-frame decision and
+snapshot retry history to the gate. Every accepted record in
+`print_gate_runs/*/report.json` includes:
+
+- `appearance_evidence`: `geometry-only` or
+  `geometry-photo-tiebreak-v1`, whether photo evidence actually selected a
+  candidate, geometric/photo weights, and candidate scores where applicable.
+- `camera_http_retries`, `camera_http_attempts` and
+  `camera_http_retry_statuses`: fresh HTTP requests and observed transient
+  camera-server status codes; zero means a verified first-request success.
+- `photo_reference_available`: whether a commissioned photo fingerprint was
+  presented to the vision worker.
+
+Each report also accumulates `vision_reliability_summary`, including accepted
+captures, geometry-only decisions, photo tie-break uses, HTTP retry captures,
+total camera HTTP retries and worker-level attempts retried. Older worker
+results that cannot provide these details are recorded as `null` rather than
+silently reported as zero. Existing scale-recheck axes, per-axis sample
+comparisons and final discrepancy remain recorded in their established
+report fields.
+
+The additional fields are passive telemetry; they do not modify motion,
+nozzle XY offsets, photo choice thresholds, verification requirements or
+print gating.
+
+For an already active RC16 system, use
+`scripts/rc16_vision_telemetry_refresh.py check` followed by `install`
+**only while the printer is idle**. This version-aware, transactional
+installer accepts either the exact baseline RC16 vision sources or the
+previous exact RC16 vision-reliability upgrade, and rejects mixed or unknown
+installations. It snapshots and verifies the old bytes before upgrading,
+automatically restores them on a failed restart/validation, and does not
+alter user-commissioned images or original G-code files.
+
 ## November 13 supervised vision reliability revisions (offline candidate)
 
 A failed original automatic calibration rejected unique Hough-located T0
