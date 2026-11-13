@@ -46,6 +46,7 @@ def capture(a):
     # Keep the total time within the configured capture timeout.
     deadline = t0 + a.timeout
     camera_retries = 0
+    camera_retry_statuses = []  # failed HTTP responses preceding a fresh successful JPEG
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -58,6 +59,7 @@ def capture(a):
             if exc.code not in (500, 502, 503, 504) or camera_retries >= 2:
                 raise
             camera_retries += 1
+            camera_retry_statuses.append(int(exc.code))
             remaining = deadline - time.monotonic()
             if remaining <= .05:
                 raise
@@ -72,7 +74,8 @@ def capture(a):
     if a.expected_center is not None:
         expected_center = [float(k) for k in a.expected_center.split(',')]
     appearance = {'method': 'geometry-only', 'matched': True,
-                  'used_for_selection': False, 'photo_weight': 0.0}
+                  'used_for_selection': False, 'photo_weight': 0.0,
+                  'candidate_count': 1}
     selector = None
     if getattr(a, 'expected_signature', None):
         if a.detector_mode != 'two_stage_roi':
@@ -85,6 +88,8 @@ def capture(a):
                 image, circles, signature, coarse, commissioned_center,
                 commissioned_radius)
             appearance.update(evidence)
+            appearance['candidate_count'] = 2
+            appearance['chosen_candidate_index'] = chosen
             return chosen
     circle = detect(image, roi=roi, annotate=image.with_name('detected_' + image.name),
                     expected_center=expected_center, expected_radius=a.expected_radius,
@@ -95,6 +100,9 @@ def capture(a):
     result = {'center_px': [float(circle[0]), float(circle[1])],
               'radius_px': float(circle[2]), 'sha256': hashlib.sha256(data).hexdigest(),
               'camera_http_retries': camera_retries,
+              'camera_http_attempts': camera_retries + 1,
+              'camera_http_retry_statuses': camera_retry_statuses,
+              'photo_reference_available': bool(getattr(a, 'expected_signature', None)),
               'appearance_evidence': appearance}
     if a.registration_anchor:
         anchor_center = [float(k) for k in a.registration_anchor_center.split(',')]
