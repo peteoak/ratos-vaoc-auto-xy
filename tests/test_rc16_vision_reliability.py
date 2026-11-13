@@ -24,7 +24,7 @@ def module(alias, path):
 
 signatures = module('rc16_test_signatures','src/auto_xy_reference_signature_rc16.py')
 vision = module('rc16_test_vision','src/auto_xy_vision_worker_rc16.py')
-detector = module('rc16_test_detector','src/auto_xy_detector.py')
+detector = module('rc16_test_detector','src/auto_xy_detector_rc16.py')
 gate = module('rc16_test_gate','src/auto_xy_gate_rc16.py')
 
 
