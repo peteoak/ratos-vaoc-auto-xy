@@ -187,5 +187,102 @@ class ScaleRecheckTests(unittest.TestCase):
                 (self.m0,self.m1),self.obj._scale_disagreement(self.m0,self.m1))
 
 
+
+class CaptureTelemetryTests(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.obj=gate.AutoXYGate.__new__(gate.AutoXYGate)
+        o=self.obj
+        o.active=0
+        o.settle=0.
+        o.count=0
+        o.directory=self.temp.name
+        o.camera='http://127.0.0.1:8080/?action=snapshot'
+        o.roi='auto'
+        o.timeout=6.
+        o.camera_detector_mode='two_stage_roi'
+        o.worker='worker.py'
+        o.python='python3'
+        o.commissioned_detector_guard=False
+        o._commission_data=None
+        o.camera_worker_mode='persistent'
+        o.camera_diagnostics_enabled=False
+        o.report={}
+        o.ensure_ok=lambda:None
+        o.tool=lambda:0
+        o.pause=lambda seconds:None
+        o.record=lambda kind,**kw:o.report.setdefault(kind,[]).append(kw)
+
+    def test_photo_tiebreak_and_http_retries_persist_in_capture_and_summary(self):
+        o=self.obj
+        o._persistent_capture=lambda cmd,image:{
+            'center_px':[602.5,441.25], 'radius_px':146.,
+            'sha256':'a'*64, 'camera_http_retries':2,
+            'camera_http_attempts':3,
+            'camera_http_retry_statuses':[500,503],
+            'photo_reference_available':True,
+            'appearance_evidence':{
+                'method':'geometry-photo-tiebreak-v1',
+                'matched':True,'used_for_selection':True,
+                'photo_weight':.25,'candidate_count':2,
+                'chosen_candidate_index':0,
+                'candidate_scores':[.11,.35], 'photo_scores':[.33,.58]}
+        }
+        self.assertEqual(o.worker_capture('test'),[602.5,441.25])
+        capture=o.report['captures'][0]
+        self.assertEqual(capture['appearance_evidence']['candidate_count'],2)
+        self.assertEqual(capture['camera_http_retry_statuses'],[500,503])
+        self.assertEqual(capture['camera_http_attempts'],3)
+        totals=o.report['vision_reliability_summary']
+        self.assertEqual(totals['accepted_captures'],1)
+        self.assertEqual(totals['photo_tiebreak_captures'],1)
+        self.assertEqual(totals['http_retry_captures'],1)
+        self.assertEqual(totals['http_retries_total'],2)
+
+    def test_unique_geometry_records_photo_not_used_and_zero_retries(self):
+        o=self.obj
+        o._persistent_capture=lambda cmd,image:{
+            'center_px':[600.,440.], 'radius_px':146.,
+            'sha256':'b'*64, 'camera_http_retries':0,
+            'camera_http_attempts':1, 'camera_http_retry_statuses':[],
+            'photo_reference_available':True,
+            'appearance_evidence':{
+                'method':'geometry-only','matched':True,
+                'used_for_selection':False,'photo_weight':0.,
+                'candidate_count':1}
+        }
+        o.worker_capture('test')
+        self.assertEqual(o.report['captures'][0]['camera_http_retries'],0)
+        self.assertEqual(o.report['vision_reliability_summary']['geometry_only_captures'],1)
+        self.assertEqual(o.report['vision_reliability_summary']['photo_tiebreak_captures'],0)
+
+    def test_legacy_worker_telemetry_is_unknown_not_falsely_zero(self):
+        o=self.obj
+        o._persistent_capture=lambda cmd,image:{
+            'center_px':[600.,440.], 'radius_px':146., 'sha256':'b'*64}
+        o.worker_capture('test')
+        capture=o.report['captures'][0]
+        self.assertIsNone(capture['camera_http_retries'])
+        self.assertIsNone(capture['appearance_evidence'])
+        self.assertEqual(o.report['vision_reliability_summary']['geometry_only_captures'],0)
+
+    def test_malformed_retry_metadata_fails_closed(self):
+        o=self.obj
+        o._persistent_capture=lambda cmd,image:{
+            'center_px':[600.,440.], 'radius_px':146.,
+            'sha256':'b'*64, 'camera_http_retries':1,
+            'camera_http_attempts':2,
+            'camera_http_retry_statuses':[200],
+            'appearance_evidence':{
+                'method':'geometry-only','matched':True,
+                'used_for_selection':False}}
+        with self.assertRaisesRegex(gate.GateAbort,'Camera/nozzle detection failed'):
+            o.worker_capture('test')
+        self.assertEqual(o.report.get('captures',[]),[])
+        self.assertEqual(len(o.report.get('capture_failures',[])),2)
+
+
+
 if __name__ == '__main__':
     unittest.main()
