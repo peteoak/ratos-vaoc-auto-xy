@@ -50,6 +50,28 @@ RC16_PAUSE_CANCEL_INTEGRATION_DESIGN.md) is archived for reference only.
    and supervised operational signoff; do not merge or tag a fully
    qualified release while the above conditions remain unresolved.
 
+## Readable generated G-code filenames
+
+RC16 now supports a human-readable generated filename that preserves a
+sanitised original part name and appends the **Pi-local processing date/time**
+with six digits of fractional seconds. Example:
+
+`__AutoXY_RC16_Dragon_Head_20261113-174530-123456.gcode`
+
+It remains a separate generated copy; the source G-code filename and bytes
+are not renamed or overwritten. COPY/MIRROR bypass remains native; protected
+independent print-start still uses the verified source registry and one-use
+handoff. Older `__AutoXY_RC16_<24-hex>.gcode` files remain authenticated
+for reprints and age-based cleanup, and cannot be mistaken for original
+unprotected files.
+
+Already-running RC16 installations must **not** run the RC15-to-RC16
+installer. The narrowly scoped
+`scripts/rc16_timestamped_gcode_refresh.py check|install` performs
+an exact-source, idle-only three-file transaction with rollback snapshot
+and post-restart protection checks. It refuses unreviewed or mixed source
+versions and active/selected prints.
+
 ## Installation and operator information
 
 Existing RC16 must not be overwritten by the old RC15 or fresh RC16
