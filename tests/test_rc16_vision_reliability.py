@@ -212,6 +212,7 @@ class CaptureTelemetryTests(unittest.TestCase):
         o.ensure_ok=lambda:None
         o.tool=lambda:0
         o.pause=lambda seconds:None
+        o._stop_vision_process=lambda:None
         o.record=lambda kind,**kw:o.report.setdefault(kind,[]).append(kw)
 
     def test_photo_tiebreak_and_http_retries_persist_in_capture_and_summary(self):
