@@ -1441,6 +1441,7 @@ class AutoXYGate:
             desc.startswith('Camera/nozzle detection failed at '),
             (self._protected_inside_gate and desc.startswith('MEASURE_ONLY alignment outside tolerance')),
             desc.startswith('Camera scale fit/zero repeatability failed'),
+            desc.startswith('Camera scale targeted recheck'),
             desc.startswith('Camera return/scatter exceeds tolerance'),
             desc.startswith('Initial toolshift settling failed:'),
             desc.startswith('Verification limit reached'),
