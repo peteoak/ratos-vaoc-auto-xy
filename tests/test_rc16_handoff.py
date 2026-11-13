@@ -190,6 +190,37 @@ class RC16HandoffTests(unittest.TestCase):
         self.assertEqual(len(self.printer.ratos.processed), 1)
         self.assertEqual(self.source.read_bytes(), before)
 
+    def test_generated_filename_retains_original_stem_and_timestamp(self):
+        import re
+        self.source.rename(self.root / 'Dragon Head & Tail.gcode')
+        before = (self.root / 'Dragon Head & Tail.gcode').read_bytes()
+        self.obj.cmd_process(Gcmd('Dragon Head & Tail.gcode'))
+        name = self.printer.ratos.v_sd.started[-1]
+        self.assertRegex(name,
+            r'^__AutoXY_RC16_Dragon_Head_Tail_[0-9]{8}-[0-9]{6}-[0-9]{6}\\.gcode$')
+        self.assertEqual((self.root / 'Dragon Head & Tail.gcode').read_bytes(), before)
+        self.assertTrue((self.root / name).is_file())
+
+    def test_timestamp_reprints_remap_to_original_and_create_new_name(self):
+        self.obj.cmd_process(Gcmd())
+        old = self.printer.ratos.v_sd.started[-1]
+        self.printer.ratos.v_sd.finish()
+        self.obj.cmd_process(Gcmd(old))
+        new = self.printer.ratos.v_sd.started[-1]
+        self.assertNotEqual(old,new)
+        self.assertRegex(new, r'^__AutoXY_RC16_part_[0-9]{8}-[0-9]{6}-[0-9]{6}\\.gcode$')
+
+    def test_generated_names_are_unique_for_rapid_staging(self):
+        import re
+        self.obj.cmd_process(Gcmd())
+        one = self.printer.ratos.v_sd.started[-1]
+        self.printer.ratos.v_sd.finish()
+        self.obj.cmd_process(Gcmd())
+        two = self.printer.ratos.v_sd.started[-1]
+        self.assertNotEqual(one, two)
+        self.assertTrue((self.root / one).is_file())
+        self.assertTrue((self.root / two).is_file())
+
     def test_single_tool_keeps_native_ratos_start(self):
         self.source.write_bytes(SINGLE + b'G1 X10\n')
         self.obj.cmd_process(Gcmd())
