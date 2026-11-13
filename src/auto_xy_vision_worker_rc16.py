@@ -14,7 +14,7 @@ import time
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 import cv2
-from auto_xy_detector import detect, register_nozzle_features
+from auto_xy_detector_rc16 import detect, register_nozzle_features
 from auto_xy_reference_signature_rc16 import select_ambiguous_pair
 
 MAX_REQUEST_BYTES = 8192
