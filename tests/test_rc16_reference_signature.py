@@ -87,10 +87,11 @@ class ReferenceSignatureTests(unittest.TestCase):
 
     def test_vision_worker_only_checks_signature_after_tuned_hough(self):
         source=(ROOT/'src/auto_xy_vision_worker_rc16.py').read_text()
-        self.assertLess(source.index('circle = detect('),
-                        source.index('appearance = compare_nozzle_signature('))
-        self.assertIn("result['appearance_evidence'] = appearance",source)
-        self.assertIn("'expected_signature'",source)
+        self.assertIn('ambiguous_selector=selector',source)
+        self.assertIn('select_ambiguous_pair(',source)
+        self.assertIn("'method': 'geometry-only'",source)
+        self.assertIn("'appearance_evidence': appearance",source)
+        self.assertNotIn('appearance = compare_nozzle_signature(',source)
 
     def test_missing_or_bad_signature_refuses(self):
         with self.assertRaisesRegex(ValueError,'Unknown'):
