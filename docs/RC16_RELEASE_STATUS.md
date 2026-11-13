@@ -72,6 +72,47 @@ an exact-source, idle-only three-file transaction with rollback snapshot
 and post-restart protection checks. It refuses unreviewed or mixed source
 versions and active/selected prints.
 
+## November 13 supervised vision reliability revisions (offline candidate)
+
+A failed original automatic calibration rejected unique Hough-located T0
+circles solely for photographic likeness (outer-rim scores 0.427/0.511
+against the previous hard 0.380 cutoff). The protected inline retry
+instead failed the **12% cross-tool camera-scale check** before offset
+measurement or correction. Manual native VAOC guarded continuation worked.
+
+Three narrow mitigations are implemented **for validation**, without
+changing the known-working XY correction algorithm, nozzle alignment
+tolerance, motion bounds, old commissioning reference files or reference
+profile format:
+
+1. **Geometry first.** A unique Hough circle satisfying the existing
+   independent coarse annulus, commissioned location and radius is no
+   longer vetoed by an appearance fingerprint. Only if **exactly two**
+   geometrically eligible circles remain does photographic evidence
+   enter a conservative 75% geometry / 25% photograph score. Unresolved
+   pairs fail closed. The signed RC15 detector file is untouched;
+   RC16 imports the separate `auto_xy_detector_rc16.py`.
+2. **Camera-scale uncertainty.** When T0/T1 physical-motion-to-pixel
+   scale disagrees by more than the existing 12%, only the suspect
+   axis is repeated: two complete 3-point sweeps per tool, with origin,
+   fitting, within-tool repeatability and cross-tool consistency checks.
+   No XY offsets are written during recapture. If the new evidence is
+   inconsistent the same protected print remains held and manual VAOC
+   remains available.
+3. **HTTP camera errors.** A snapshot request with server HTTP
+   500/502/503/504 can make two additional fresh HTTP requests within
+   the original capture timeout. It never reuses stale JPEGs and leaves
+   detector-rejection errors untouched.
+
+The existing installed RC16 is **not** upgraded with any full RC15/RC16
+installer. The pinned script
+`scripts/rc16_vision_reliability_refresh.py check` and then `install`
+is an idle-only, rollback-verified update that replaces three known
+RC16 modules and adds one new RC16-only detector. It refuses modified,
+mixed or unknown installed source versions. Both CI and real original
+frame replay are required before qualifying these revisions for
+unattended printing.
+
 ## Installation and operator information
 
 Existing RC16 must not be overwritten by the old RC15 or fresh RC16
