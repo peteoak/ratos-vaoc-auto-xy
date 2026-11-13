@@ -27,7 +27,7 @@ INCLUDE = '[include auto_xy_rc16.cfg]'
 RC15_INCLUDE = '[include auto_xy.cfg]'
 SOURCES = {
     'auto_xy/klipper/auto_xy_gate.py':
-        ('src/auto_xy_gate_rc16.py', '5a569655c9edecfb41549bdf468e208abdaf1356'),
+        ('src/auto_xy_gate_rc16.py', '3875f761cc38bede982d0cba3f47264d20b990ad'),
     'auto_xy/vision/auto_xy_retention_rc16.py':
         ('src/auto_xy_retention_rc16.py', '4952971240a17c187a7a80a5f696d4d520ea5fdc'),
     'auto_xy/klipper/auto_xy_ratos_handoff_rc16.py':
@@ -39,9 +39,11 @@ SOURCES = {
     'auto_xy/vision/auto_xy_commission_candidates_rc16.py':
         ('src/auto_xy_commission_candidates_rc16.py', '27028efe316511ddce869685491b8228005e20ce'),
     'auto_xy/vision/auto_xy_reference_signature_rc16.py':
-        ('src/auto_xy_reference_signature_rc16.py', 'a6ab2cfb55483d5b41c5e408b37c00e23ce95447'),
+        ('src/auto_xy_reference_signature_rc16.py', '1350573fc9052a3ccd8639d2a109a1555964de97'),
+    'auto_xy/vision/auto_xy_detector_rc16.py':
+        ('src/auto_xy_detector_rc16.py', 'e44207a3da584961031280f6332a597326dc5e63'),
     'auto_xy/vision/auto_xy_vision_worker.py':
-        ('src/auto_xy_vision_worker_rc16.py', 'eb11b30bafeee1f88bc44ffba10c6c73741b1a0b'),
+        ('src/auto_xy_vision_worker_rc16.py', '1556bed01c50fd87c188ff0d8b670ec3b4baaaf9'),
     'auto_xy/workers/rc16_recommission_worker.py':
         ('src/tools/rc16_recommission_worker.py', '73d9b940fe580eac33671b27e91c3f0c39d3fc30'),
     'auto_xy/workers/rc16_reference_retention.py':
