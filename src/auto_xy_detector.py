@@ -96,7 +96,7 @@ def _aligned_precision_crop(gray, coarse_local, radius):
 
 
 def _hough(gray, x, y, radius, param2=36, expected_center=None,
-           expected_radius=None, coarse_center=None):
+           expected_radius=None, coarse_center=None, ambiguous_selector=None):
     smoothed = cv2.GaussianBlur(gray, (7, 7), 1.5)
     found = cv2.HoughCircles(smoothed, cv2.HOUGH_GRADIENT, dp=1.25,
                              minDist=105, param1=105, param2=param2,
@@ -123,6 +123,15 @@ def _hough(gray, x, y, radius, param2=36, expected_center=None,
                  <= COARSE_MAX_HOUGH_ERROR_PX]
     if not circles:
         return None
+    if len(circles) == 2 and ambiguous_selector is not None:
+        # The selector sees only candidates already accepted by expected
+        # position, expected radius AND independent coarse annular location.
+        # Never use a photograph to rescue a geometrically rejected circle.
+        index = ambiguous_selector(circles, coarse_center,
+                                   expected_center, expected_radius)
+        if type(index) is not int or index not in (0, 1):
+            raise ValueError('Ambiguous nozzle tie-break returned invalid candidate')
+        return circles[index]
     if len(circles) != 1:
         raise ValueError('Ambiguous camera ROI: %d nozzle-sized circles detected; '
                          'commission a tighter image crop rather than guessing' % len(circles))
@@ -130,7 +139,8 @@ def _hough(gray, x, y, radius, param2=36, expected_center=None,
 
 
 def detect(path, roi=DEFAULT_ROI, radius=(MIN_RADIUS, MAX_RADIUS), annotate=None,
-           expected_center=None, expected_radius=None, detector_mode='legacy'):
+           expected_center=None, expected_radius=None, detector_mode='legacy',
+           ambiguous_selector=None):
     if detector_mode not in ('legacy','two_stage','two_stage_roi'):
         raise ValueError('Unknown detector mode')
     if detector_mode in ('two_stage','two_stage_roi') and expected_center is None:
@@ -174,7 +184,8 @@ def detect(path, roi=DEFAULT_ROI, radius=(MIN_RADIUS, MAX_RADIUS), annotate=None
     if roi_mean >= 45:
         best = _hough(precision_gray, precision_x, precision_y, radius,
                       expected_center=expected_center,
-                      expected_radius=expected_radius, coarse_center=coarse_center)
+                      expected_radius=expected_radius, coarse_center=coarse_center,
+                      ambiguous_selector=ambiguous_selector)
         if best is None:
             raise ValueError(f'No plausible nozzle rim in normally lit image {path}; '
                              f'ROI mean={roi_mean:.1f}; clean/focus/check lighting')
@@ -198,7 +209,8 @@ def detect(path, roi=DEFAULT_ROI, radius=(MIN_RADIUS, MAX_RADIUS), annotate=None
                           crop_x:crop_x+precision_gray.shape[1]]
             circle = _hough(local, precision_x, precision_y, radius,
                             expected_center=expected_center,
-                            expected_radius=expected_radius, coarse_center=coarse_center)
+                            expected_radius=expected_radius, coarse_center=coarse_center,
+                      ambiguous_selector=ambiguous_selector)
             if circle is not None:
                 hits.append((name, circle))
         if len(hits) < 3:
