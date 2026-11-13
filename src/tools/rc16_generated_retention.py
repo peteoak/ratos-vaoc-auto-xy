@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 from urllib.request import urlopen
 
-PAT = re.compile(r'^__AutoXY_RC16_([0-9a-f]{24})\.gcode$')
+PAT = re.compile(r'^__AutoXY_RC16_([0-9a-f]{24}|[A-Za-z0-9][A-Za-z0-9_-]{0,59}_[0-9]{8}-[0-9]{6}-[0-9]{6})\.gcode$')
 SHA = re.compile(r'^[0-9a-f]{64}$')
 CHUNK = 128 * 1024
 DEFAULT_DAYS = 30
@@ -166,7 +166,7 @@ def pending_candidates(root, registry, now=None, age_days=DEFAULT_DAYS,
         if len(results) >= max_candidates:
             break
         try:
-            match = re.fullmatch(r'([0-9a-f]{24})\.pending\.json', marker.name)
+            match = re.fullmatch(r'([0-9a-f]{24}|[A-Za-z0-9][A-Za-z0-9_-]{0,59}_[0-9]{8}-[0-9]{6}-[0-9]{6})\.pending\.json', marker.name)
             if not match or marker.is_symlink() or not marker.is_file():
                 continue
             st = marker.stat()
@@ -264,7 +264,7 @@ def clean(root, registry, execute=False, confirm='', age_days=DEFAULT_DAYS,
                     continue
                 # Never remove an owned file that later received a successful
                 # final registry entry.
-                final = registry / (marker.name[:24] + '.json')
+                final = registry / (marker.name[:-len('.pending.json')] + '.json')
                 if final.exists() or final.is_symlink() or generated.is_symlink():
                     continue
                 cutoff = (time.time() if now is None else now) - age_days * 86400
