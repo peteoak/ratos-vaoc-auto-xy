@@ -197,7 +197,7 @@ class RC16HandoffTests(unittest.TestCase):
         self.obj.cmd_process(Gcmd('Dragon Head & Tail.gcode'))
         name = self.printer.ratos.v_sd.started[-1]
         self.assertRegex(name,
-            r'^__AutoXY_RC16_Dragon_Head_Tail_[0-9]{8}-[0-9]{6}-[0-9]{6}\\.gcode$')
+            r'^__AutoXY_RC16_Dragon_Head_Tail_[0-9]{8}-[0-9]{6}-[0-9]{6}\.gcode$')
         self.assertEqual((self.root / 'Dragon Head & Tail.gcode').read_bytes(), before)
         self.assertTrue((self.root / name).is_file())
 
@@ -208,7 +208,7 @@ class RC16HandoffTests(unittest.TestCase):
         self.obj.cmd_process(Gcmd(old))
         new = self.printer.ratos.v_sd.started[-1]
         self.assertNotEqual(old,new)
-        self.assertRegex(new, r'^__AutoXY_RC16_part_[0-9]{8}-[0-9]{6}-[0-9]{6}\\.gcode$')
+        self.assertRegex(new, r'^__AutoXY_RC16_part_[0-9]{8}-[0-9]{6}-[0-9]{6}\.gcode$')
 
     def test_generated_names_are_unique_for_rapid_staging(self):
         import re
