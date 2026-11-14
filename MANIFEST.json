@@ -1,6 +1,6 @@
 {
   "version": "0.5.0-rc15-dev6",
-  "description": "RC15 dev6 retention candidate; offline checks and supervised printer reinstall still required",
+  "description": "RC15 Dev6 source compatibility manifest on RC16 main; historical original preserved in docs/legacy/RC15_MANIFEST.json and release/rc15-dev6-frozen",
   "sha256": {
     ".github/ISSUE_TEMPLATE/compatibility-report.md": "e3219192017fa07e4817ef1aee8351d6e79650d8ef28cc87faac27b09e7cb86f",
     ".github/workflows/rc15-dev5-offline.yml": "4f8d3c78ff7e9ccf5d4ca0cd756051729bd0a3a27c5be9fb3eec456000525c6a",
@@ -11,7 +11,7 @@
     "docs/NEW_INSTALL.md": "170d012e441f601d3b2056cdecd2da4841b7894f4a65abdf9c6366ce8e8b7569",
     "docs/RELEASE_NOTES.md": "37333522a475828baa4617d32f680524f4482cd83f7ad04951d582de9c01f6a2",
     "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
-    "README.md": "4fc2f588df4edb8222afaa62a7e2cd139337335f6fb05ac474185e6e3a0d9ea7",
+    "README.md": "0d072e9a0f5259829b168753165c1f03de1cefbfcc035ee3f8c8de196574bea7",
     "RELEASE_STATUS.md": "abff72e888fd16912ac7c513d2a6431cc8de5dcf7f95d415dc9337f5da34f732",
     "requirements-vision.txt": "e589d159631b333ea750762783ffec0b6a07c07437c38c6c2e838bcbf26e782c",
     "scripts/check_installed_dev5.py": "c5a2edbe2edf237d752ae7f56c45241dae22708ee48b0f762dc1d41576393ee6",
