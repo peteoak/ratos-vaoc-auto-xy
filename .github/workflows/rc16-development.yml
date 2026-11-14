@@ -1,0 +1,29 @@
+name: AutoXY RC16 development checks
+on:
+  push:
+    branches:
+      - dev/rc16-resource-aware-integration
+  pull_request:
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install RC16 trial ABI pair from binary wheels only
+        run: python -m pip install --only-binary=:all: -r requirements-vision-rc16.txt
+      - name: Validate vision import and real OpenCV operation
+        run: |
+          python -c 'import cv2,numpy; a=numpy.zeros((4,4,3),dtype=numpy.uint8); assert cv2.cvtColor(a,cv2.COLOR_BGR2GRAY).shape==(4,4); assert numpy.__version__=="1.26.4" and cv2.__version__=="4.11.0"; print("ABI smoke PASS",numpy.__version__,cv2.__version__)'
+      - name: Compile full source and tests
+        run: python -m compileall -q src scripts tests
+      - name: RC16 vision environment offline tests
+        run: python -m unittest discover -s tests -p 'test_rc16_vision_setup.py' -v
+      - name: Existing suite (regression)
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
