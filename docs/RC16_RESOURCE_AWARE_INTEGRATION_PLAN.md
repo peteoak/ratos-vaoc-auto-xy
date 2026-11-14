@@ -1,5 +1,7 @@
 # AutoXY RC16 Dev1 — resource-aware protected-print integration design
 
+> **HISTORICAL ENGINEERING RECORD — not current installation or operational guidance.** Architecture plan written before integration; proposals about missing print-start interception/retention no longer describe the current RC16 implementation. For current behaviour and remaining qualification use [RC16 Start Here](RC16_START_HERE.md) and [RC16 Release Status](RC16_RELEASE_STATUS.md).
+
 **Status:** DESIGN ONLY — not installed, not hardware-validated, not a release.  
 **Base:** public RC15 Dev6 on `main`.  
 **Purpose:** a cohesive, publishable development revision that integrates automatic IDEX protected-print preparation without adding unacceptable load to Klipper or restricting RatOS.
