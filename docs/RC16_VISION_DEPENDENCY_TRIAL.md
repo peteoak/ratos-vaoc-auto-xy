@@ -1,5 +1,7 @@
 # RC16 Dev1: vision dependency compatibility work (experimental)
 
+> **HISTORICAL ENGINEERING RECORD — not current installation or operational guidance.** Initial NumPy/OpenCV ABI trial only; its declaration that RC16 is not on main and no active installer exists is no longer true. For current behaviour and remaining qualification use [RC16 Start Here](RC16_START_HERE.md) and [RC16 Release Status](RC16_RELEASE_STATUS.md).
+
 This document applies **only to** `dev/rc16-resource-aware-integration`. The public RC15 Dev6 installer and `main` are unchanged. The RC16 print-preparation integration, in-place upgrade and validated installer are **not complete**.
 
 ## Why this exists
