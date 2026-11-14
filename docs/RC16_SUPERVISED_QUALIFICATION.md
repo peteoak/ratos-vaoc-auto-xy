@@ -1,6 +1,6 @@
 # RC16 supervised RatOS printer qualification
 
-**Status:** Development qualification checklist, not installation approval.
+**Status (14 November 2026):** Live qualification matrix for the RC16 supervised candidate now on `main`; **not** unattended-print approval. The owner has demonstrated successful calibration, a held-photo failure, a held-scale disagreement failure and one guarded native manual-VAOC continuation. The remaining negative paths still need evidence; see [current release status](RC16_RELEASE_STATUS.md).
 **Target:** RatRig V-Core 4 300 IDEX, RatOS 2.1, Beacon, fixed VAOC camera, physical homing switches.
 **Installation contract:** One supported active-only upgrade, automatic print-file processor and storage cleanup, protected gate enabled, automatic rollback on startup failure. No slicer postprocessor and no disabled-staging workflow.
 
@@ -10,6 +10,16 @@
 - Confirm idle/cool state, native VAOC not active, required vision interpreter and camera, sufficient backup space.
 - Upgrade once under active installer; require Klipper Ready, `protected_print_enabled=True`, handoff `enabled=True`, `armed=True`, `sd_api_guarded=True`, `resume_api_guarded=True`, generated retention active and saved `auto_xy_v2_enabled=1`, `measure_only=0`. If verification fails, restore RC15 and restart automatically.
 - Confirm source-identical manual VAOC and exact nozzle offsets after successful upgrade. Native RatOS originals remain untouched.
+
+## What real hardware has already shown
+
+- **Observed:** Multiple independent two-tool calibration reports with final X/Y errors within ±0.030 mm, including two independent verification cycles and a subsequent alignment after a new print.
+- **Observed:** Geometry-only nozzle recognition accepted all 43 camera captures in a post-telemetry run; no photo tie-breaks and no internal HTTP retry events were needed.
+- **Observed:** Earlier photo-likeness and cross-tool camera-scale disagreements failed closed; supervised native manual VAOC continuation was exercised.
+- **Not established by those observations:** Real targeted-scale recapture on >12% discrepancy, real HTTP camera 5xx retries, native Mainsail recommissioning end-to-end on another camera, all direct virtual-SD bypass paths, unattended operation, or the beta tester's original two-circle images.
+- **Operationally accepted:** Ordinary Pause/Cancel can wait while synchronous calibration runs. Emergency Stop remains the appropriate hard safety action.
+
+For each matrix case below, record the exact evidence and outcome; an untested case is not implicitly passed.
 
 ## Supervised print matrix
 
