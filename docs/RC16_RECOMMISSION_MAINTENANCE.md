@@ -1,6 +1,6 @@
 # RC16 Mainsail — Recommission Nozzles
 
-**Development status:** Macro/controller and image-retention backend exist in the RC16 branch, with offline tests. Do not deploy to a live printer until the active RC16 installer and native VAOC integration are qualified.
+**Current status:** The Mainsail macro/controller and retention backend are present in RC16 on `main`. Supervised calibrations and native manual-VAOC recovery have been demonstrated on the owner's RatOS printer; full recommissioning, ambiguous beta-test nozzle scenes and cross-host correctness still require independent qualification. Do not treat this maintenance guide as unattended-use approval. See [current release status](RC16_RELEASE_STATUS.md).
 
 ## When it is needed
 
@@ -31,9 +31,9 @@ Capture uses the **complete camera frame** (ROI auto). The existing production t
 
 ## Known limitations (must not be concealed)
 
-1. RC16 now derives an independent compact radial appearance signature from each tool's three reference JPEGs and checks it alongside the tuned Hough `two_stage_roi` geometry on later captures. This is not full photograph-to-photograph template matching. Original unannotated nozzle images and Pi 4 hardware tests must validate thresholds and false rejections.
+1. RC16 derives an independent compact radial reference signature from each tool's three JPEGs. The current **geometry-first** `two_stage_roi` detector accepts a unique Hough/nozzle candidate after independent coarse, position and radius checks **without photographic veto**. Only when exactly two candidates remain does photo likeness contribute up to 25% in a conservative tie-break; otherwise ambiguity fails closed. The beta tester's original unannotated scenes and physical nozzle geometry still need supervised replay.
 2. A conservative manually positioned VAOC full-frame reticle/contrast fallback exists for multiple commissioning circles. It refuses uncertain selections. The beta tester's original unannotated images, unusually worn nozzles and alternate camera reticles are not yet hardware-qualified.
-3. The Mainsail sequence has not yet been proven against actual printer homing, _VAOC native state, USB camera, offset preservation and service restarts. Do not treat green offline CI as live qualification.
+3. The *complete recommissioning sequence*, including actual native VAOC handoff, six raw photographs, saved profile publication, offset preservation and restart/recovery on different hardware, is not fully qualified. Owner print-calibration success does not prove the beta tester's ambiguous capture or this entire maintenance workflow. Green offline CI is insufficient.
 4. Camera positioning is still a manual VAOC decision. Image-centre repeatability does not by itself prove the physical extrusion-axis centre on an asymmetrically worn nozzle.
 
 ## Implementation
