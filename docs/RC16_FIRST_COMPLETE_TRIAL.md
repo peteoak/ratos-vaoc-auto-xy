@@ -1,5 +1,7 @@
 # RC16 complete integration — first supervised printer trial
 
+> **HISTORICAL ENGINEERING RECORD — not current installation or operational guidance.** First supervised installation and recovery trial record; its earlier strict/rim-only photographic-verifier wording is superseded by the geometry-first 0%/25%-maximum tie-break policy. For current behaviour and remaining qualification use [RC16 Start Here](RC16_START_HERE.md) and [RC16 Release Status](RC16_RELEASE_STATUS.md).
+
 **Build status:** One integrated source tree, source checksums pinned, offline tests passed. This is a **supervised test candidate**, not approval for unattended printing or a production release. It must be tested on actual RatOS/VAOC hardware before promotion.
 
 For current observed hardware progress and remaining acceptance criteria, see [RC16 release status](RC16_RELEASE_STATUS.md). **Accepted Klipper operating limitation:** ordinary Mainsail Pause/Cancel may be queued while synchronous AutoXY calibration runs. This is understood and accepted by the owner and is not a release blocker. If the printer behaves unsafely, use Klipper **Emergency Stop** (shutdown, not a resumable Pause); then start afresh after normal recovery, homing and protected calibration. An [optional asynchronous redesign](RC16_PAUSE_CANCEL_INTEGRATION_DESIGN.md) is documented for possible future work, not required for RC16.
