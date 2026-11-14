@@ -1,70 +1,55 @@
-# AutoXY v0.5.0-rc15-dev6 — storage retention release candidate
+# AutoXY RC16 — RatOS 2.1 IDEX nozzle XY calibration
 
-**Development pre-release** for RatOS 2.1 IDEX, validated on one RatRig V-Core 4 300 IDEX but not across multiple printers. RC15 dev6 adds bounded artifact retention, eliminates the redundant T0 reload immediately after native `_VAOC_START`, and promotes the owner's selected detector and timing defaults. Protected printing remains opt-in until automatic integration is validated.
+**Current main-branch code: RC16 supervised release candidate (controller `0.5.0-rc16-dev1`).** AutoXY is a third-party, printer-specific integration for the RatRig V-Core 4 IDEX with native RatOS VAOC. It is **not yet qualified for unattended protected printing or for arbitrary camera/nozzle setups**. RC16 has completed multiple supervised calibrations on the project printer; remaining safety and cross-machine tests are tracked in the [live qualification status](docs/RC16_RELEASE_STATUS.md).
 
-## Getting started — fresh installation
+**Start here:** [RC16 installation and operation guide](docs/RC16_START_HERE.md) · [Latest release/qualification status](docs/RC16_RELEASE_STATUS.md) · [Diagnostics and reports](docs/RC16_DIAGNOSTICS.md) · [Historical documentation index](docs/HISTORICAL_DOCUMENTS.md)
 
-**First installation only.** New to SSH, Klipper extensions or camera commissioning? Start with the **[step-by-step fresh installation guide](docs/NEW_INSTALL.md)**. It covers prerequisites, SSH login, backups, camera checks, Python dependencies, preflight, installation, commissioning, first supervised measurement, troubleshooting and rollback.
+## What RC16 does
 
-**Three distinct milestones:** (1) installed and Klipper Ready, (2) camera commissioned after native manual VAOC, and (3) supervised measurement passed and automatic calibration deliberately enabled. Fresh installs start **OFF and uncommissioned**.
+- Performs fresh camera-guided T0/T1 XY alignment for **independent dual-tool IDEX jobs only**. Single-tool, COPY and MIRROR follow native RatOS, without AutoXY calibration.
+- Preserves the native RatOS G-code processor and the original slicer file. Protected processing generates a separate, timestamped file; the print cannot proceed past its calibration barrier unless alignment is verified.
+- Requires fresh homing, heating/heatsoak, nozzle measurement and two consecutive XY verifications after a prior print has disabled steppers. A previous successful result cannot substitute for a new calibration.
+- Targets ±0.030 mm per XY axis, with bounded adjustments, verification retries and fail-closed checks.
+- Uses an independent coarse geometric locator plus Hough detection. One uniquely plausible circle does **not** have to match its commissioning photograph; when **exactly two** geometry-qualified circles remain, reference appearance contributes at most 25% of candidate selection. Unresolved ambiguity fails closed.
+- Can perform targeted per-axis camera-scale recapture when cross-tool scale disagrees by over 12%, and bounded **fresh** HTTP snapshot retries on transient 500/502/503/504 responses.
+- Records actual photo-selection decisions, camera HTTP attempts, scale diagnostics and correction measurements in `report.json`. Image storage is managed with a **soft** aggregate target (512 MiB by current defaults), not a hard cap.
+- Supports a guarded, one-use continuation using *native manual VAOC* when an eligible protected print is safely recoverable; a standalone `AUTO_XY_RUN_NOW` has **no print to resume**.
 
-Quick reference for an **idle, cool, fresh RatOS 2.1 IDEX printer** with working stock native VAOC and saved tool offsets:
+## Installation: choose the correct path
 
-~~~bash
-ssh pi@ratos.local
-cd /home/pi
-git clone https://github.com/peteoak/ratos-vaoc-auto-xy.git
-cd /home/pi/ratos-vaoc-auto-xy
-python3 -m venv /home/pi/auto-xy-venv
-/home/pi/auto-xy-venv/bin/python -m pip install -r requirements-vision.txt
-python3 scripts/verify_stock_camera.py
-python3 scripts/install_autoxy.py --check --mode fresh
-~~~
+**Do not run an installer just because you cloned `main`.** AutoXY controls real nozzle movement and saved offsets. Run only on compatible RatOS 2.1 hardware with working native VAOC, under supervision, with a complete off-device backup, idle/clear printer and an understood rollback.
 
-**Only if preflight passes**, the install command for **RC15 dev6** is:
+| Starting state | Supported path in this tree | Critical restriction |
+| --- | --- | --- |
+| No AutoXY installed | `scripts/rc16_release_install.py check`, then `install` only after supervised approval | A fresh device requires nozzle/camera commissioning before trusting calibration |
+| Recognised installed RC15 Dev6 | Same RC16 active installer, which checks recognised source variants and snapshots rollback | Unknown edits, partially installed systems or unsafe printer state are refused |
+| **Already running RC16** | **Do not run the fresh/RC15 installer.** Use a specifically version-pinned, idle-only RC16 refresh after its `check` passes | If the installed files are already current, no update is required |
+| Need an exact original RC15 Dev6 package | Use the immutable [RC15 frozen branch](https://github.com/peteoak/ratos-vaoc-auto-xy/tree/release/rc15-dev6-frozen), **not current `main`** | RC15's signed baseline is preserved separately for history/rollback |
 
-~~~bash
-python3 scripts/install_autoxy.py --install --mode fresh --confirm INSTALL_RC15_DEV6_FRESH
-sudo systemctl restart klipper
-python3 scripts/post_install_check.py
-~~~
+For exact examples and commissioning steps, follow the [RC16 start-here guide](docs/RC16_START_HERE.md). An installer **must refuse** an unrecognised installation; never delete installed files or bypass preflight to make the check pass.
 
-**Do not stop here:** follow the [commissioning and measure-only steps](docs/NEW_INSTALL.md#step-9--commission-the-nozzle-camera-using-your-printer) before enabling AutoXY. **Do not use this installer over an existing AutoXY version.** No general-purpose in-place upgrade tool is supported. The public protected-print option remains **disabled** and does not transparently transform ordinary slicer files.
+## Typical supervised print operation
 
-## Storage retention
+1. Confirm the camera profile and native VAOC are commissioned and AutoXY has no unresolved fault.
+2. Start a normal independent **two-tool** print using RatOS/Mainsail; AutoXY's guarded file processing and calibration occur automatically when enabled.
+3. After fresh homing and the thermal preflight, AutoXY measures T0/T1 and may apply bounded XY corrections. It requires two consecutive in-tolerance verifications before releasing the protected print to RatOS.
+4. If automatic calibration fails, **do not bypass the hold with M24/Resume**. Use the supported guarded retry or native manual VAOC recovery and explicit continuation, or cancel safely.
+5. For a new print after steppers disable, repeat fresh homing and calibration rather than reusing prior measurements.
 
-Default retention (age measured from the closed run's report modification time):
-- Successful calibration photographs: 7 days; 256 MiB category cap.
-- Failed calibration photographs: 30 days; 512 MiB category cap.
-- Diagnostic photographs: 7 days; 512 MiB category cap.
-- Endurance exports: 30 days; 128 MiB category cap.
-- `report.json`: 90 days; 128 MiB category cap.
+**Accepted operating limitation:** Mainsail's ordinary Pause/Cancel can be delayed during synchronous calibration. For an unsafe physical situation use Klipper **Emergency Stop**, which invalidates calibration and requires a normal safe recovery. See [Pause/Cancel design record](docs/RC16_PAUSE_CANCEL_INTEGRATION_DESIGN.md).
 
-A cleanup worker runs independently of calibration. Failed or incomplete runs, unknown files, symlinks and unexpectedly modified files are protected by conservative ownership and status checks. Latest failure runs are protected from quota pressure, but not age expiry. Quotas are best-effort when protected data cannot be removed. Cleanup errors never authorise printing or alter saved offsets.
+## Qualification and compatibility
 
-Preview files that *would* be deleted, without deleting any files:
-```bash
-python3 src/auto_xy_retention.py --results /home/pi/auto_xy/print_gate_runs
-```
-Destructive cleanup is opt-in on CLI with `--run`; it is also scheduled by the extension under its safety gates. Inspect preview before using CLI deletion. Defaults can be configured using the `retention_*` settings in `config/auto_xy.cfg.example`.
+The main-branch source was promoted after a GitHub test run of **370 tests (5 skipped)** and successful supervised calibrations/recovery on the owner's machine. This is **not** a claim of universal physical accuracy, complete unsafe-start resistance on every RatOS build or unattended readiness. Original, unannotated images from the beta tester's difficult two-circle scene have not yet been replayed against the final guarded detector; see [qualification status](docs/RC16_RELEASE_STATUS.md).
 
-## Existing installations
+The normal production camera path requires a properly commissioned `two_stage_roi` profile. Pi architecture/OS-specific OpenCV/NumPy compatibility must be checked; the RC16 dependency versions are pinned for the reviewed candidate but are **not certified on every Pi architecture**.
 
-Do **not** use the fresh installer as an upgrade or uninstall command. The owner successfully completed a backed-up quarantine, fresh GitHub reinstall and subsequent reviewed controller/config update. There is still **no general-purpose supported in-place upgrade/uninstall tool**; existing installations require a machine-specific reviewed procedure. Preserve camera reference photographs and commissioning configuration outside any cleanup-managed results directory.
+## Legacy release integrity
 
-## Validation
+The archived RC15 README and `MANIFEST.json` are preserved byte-for-byte in [`docs/legacy/`](docs/legacy/) and in the **`release/rc15-dev6-frozen`** branch. The root `MANIFEST.json` remains an RC15 *compatibility input* for the RC16 installer and is not an RC16 release manifest. The separate [RC16 source inventory](docs/RC16_SOURCE_MANIFEST.json) describes current RC16 additions. Changing a landing page on `main` does **not** rewrite or qualify the historical RC15 release.
 
-Run offline tests:
-```bash
-python3 -m unittest discover -s tests -p 'test_*.py'
-```
-
-Dev5 completed supervised 25-, 50- and 100-tool-change endurance tests on one RatRig V-Core 4 300 IDEX. RC15 dev6 was successfully installed from GitHub on that printer; Klipper reached Ready, the camera stream and restored commissioning profile were verified, and the corrected controller matched the source checksum. The owner ran 39 offline tests (34 passed, 5 skipped), and GitHub Actions passed on the corrected source commit. **The first physical calibration after removing the duplicate T0 load, live retention expiry/deletion, and complete failure/recovery-to-print continuation have not been verified in this release.** Automatic XY runs after bed heatsoak and before later Beacon probing; fresh homing and measurement must be respected after motors disable.
-
-## Validated machine defaults
-
-`config/auto_xy.cfg.example` now defaults to `camera_detector_mode: two_stage_roi`, persistent worker, original settling path, 0.80-second camera pair gap and settling time, commissioned detector guard enabled, and `protected_print_enabled: False`. AutoXY's saved enable state is still deliberately OFF on a clean installation until operator commissioning and enablement. Ordinary RatOS START_PRINT remains available with AutoXY enabled. Experimental protected-print support requires the separately prepared two-phase print-file path; enabling its config flag alone does not automatically convert ordinary slicer files. Do not turn it on for ordinary unmodified print files.
+**Nozzle offsets, printer-specific camera profiles and reference photographs must never be bundled as universal defaults.**
 
 ## Attribution
 
-Independent AutoXY project, unaffiliated with RatOS. See `THIRD_PARTY_NOTICES.md` for the outstanding upstream macro provenance and licence review before public redistribution.
+See [LICENSE](LICENSE), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), and the RatOS/VAOC requirements in the installation guide.

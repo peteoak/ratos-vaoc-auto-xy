@@ -1,5 +1,7 @@
 # AutoXY RC16 — requirements-to-code audit (11 November 2026)
 
+> **HISTORICAL ENGINEERING RECORD — not current installation or operational guidance.** Requirements audit dated 11 November, before the current main merge and later printer validation; status labels are historical. For current behaviour and remaining qualification use [RC16 Start Here](RC16_START_HERE.md) and [RC16 Release Status](RC16_RELEASE_STATUS.md).
+
 **Review scope.** Recovered project-conversation decisions, earlier AutoXY documents available in the user's project/Library, RC15/RC16 source and current automated tests. Earlier chat retrieval is not a complete verbatim export of every conversation: this audit must not be described as a line-by-line reading of every historic chat.
 
 **Release state:** RC16 has a unified one-command active installer, but remains a development branch, not qualified for unattended hardware printing. A green offline suite does not prove compatibility with this RatOS printer. All code-status claims below refer to branch `dev/rc16-resource-aware-integration`.

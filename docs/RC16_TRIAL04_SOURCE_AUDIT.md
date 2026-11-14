@@ -1,5 +1,7 @@
 # RC16 source audit: private Trial04 handoff (2026-11-09)
 
+> **HISTORICAL ENGINEERING RECORD — not current installation or operational guidance.** Private Trial04 source audit, retained as evidence for why the later guarded integration was designed. For current behaviour and remaining qualification use [RC16 Start Here](RC16_START_HERE.md) and [RC16 Release Status](RC16_RELEASE_STATUS.md).
+
 **Status:** sanitized engineering findings. Source received privately; **the Trial04 implementation is not being copied to GitHub**. No active printer modification.
 
 ## Offline verification completed

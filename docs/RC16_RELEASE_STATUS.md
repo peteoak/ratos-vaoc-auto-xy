@@ -1,163 +1,58 @@
-# AutoXY RC16 — supervised integration status (November 2026)
+# AutoXY RC16 — current release and hardware-qualification status
 
-RC16 integrates native RatOS print-start protection, camera-guided T0/T1
-recommissioning, automatic image retention, and guarded native VAOC manual
-recovery when automatic alignment cannot safely complete.
+**Last reviewed: 14 November 2026.** RC16 code was merged into repository default `main` on 14 November 2026 (promotion merge `d0c9c286563c7b3ec3768a3c27f6dfa69b7dc21a`). The latest owner-tested vision/telemetry source was `941464a6c85ab1c0fe2c97b2aadf74b4d11e5f1c` before that merge.
 
-This is an **integrated supervised release candidate**, not a production
-release approved for unattended two-tool printing.
+**Release classification: supervised RC16 integration candidate, not yet approved for unattended dual-tool protected printing.** A GitHub main merge is a source-control milestone, **not** a published hardware-qualified release, installer run or demonstration of success on every camera/nozzle.
 
-## Hardware evidence so far
+[Start here](RC16_START_HERE.md) · [Diagnostics](RC16_DIAGNOSTICS.md) · [Outstanding hardware tests](RC16_SUPERVISED_QUALIFICATION.md) · [Historical documents](HISTORICAL_DOCUMENTS.md)
 
-- Full active installer and initial Klipper/RatOS runtime preflight completed.
-- Both nozzle references saved in native VAOC, three original full-frame
-  photographs each, with an integrity check of all six JPEGs.
-- One automatically gated print failed at T0 photographic appearance matching.
-  RC16 held the protected print, and native VAOC manual recovery succeeded.
-- The too-strict full-face appearance check was revised to a tolerant
-  *outer-rim likeness check* without changing the geometric Hough alignment,
-  commissioned circle limits or XY correction mathematics. Offline tests
-  and GitHub CI passed.
-- A subsequent supervised automatic calibration with similar T0 ooze
-  completed with one offset adjustment and two independent verifications.
+## What has been implemented
 
-These observations are not proof of every error path, physical nozzle
-accuracy on every printer, or unattended reliability. Established XY
-correction and convergence testing from earlier candidates is not repeated
-solely because the optical appearance check changed.
+- Protected print-start handling for genuinely independent IDEX jobs using **both** tools; single-tool, COPY and MIRROR bypass AutoXY. Original slicer files remain intact; generated protected files include a sanitised original name and Pi-local timestamp, e.g. `__AutoXY_RC16_Dragon_Head_20261113-174530-123456.gcode`.
+- Fresh physical homing and heatsoak before calibration for each new eligible print after the motors disable; new camera XY measurement and two consecutive in-tolerance verification cycles (±0.030 mm/axis).
+- Held-file failure handling with one-use guarded release after a verified automatic alignment or eligible supervised native VAOC recovery; no slicer postprocessor needed. `AUTO_XY_RUN_NOW` remains a standalone action with no held print to resume.
+- RC16-only geometry-first Hough detector. A **unique**, independently geometry-qualified circle is accepted without photo-reference veto; for **exactly two** eligible circles, photographic likeness is a ≤25% tie-break. An unresolved candidate pair fails closed.
+- Targeted X/Y scale recapture on >12% T0/T1 disagreement, without changing established XY correction mathematics; original commissioned reference images need not be rewritten solely for this update.
+- Fresh bounded HTTP snapshot retries for 500/502/503/504 under the existing timeout, **never** recycling previous JPEGs.
+- Per-capture `appearance_evidence`, `camera_http_attempts`, `camera_http_retries`, retry status history, and aggregate `vision_reliability_summary` in `report.json`.
+- Automatic idle retention of calibration JPEGs using a **soft** combined default target of about 512 MiB; active, referenced, incomplete and unknown files remain protected. Separate generated-file retention checks preserve selected/paused files.
+- Transactional supervised fresh/RC15 installer and narrowly scoped, version-pinned existing-RC16 refresh scripts, with refusal for unknown states and rollback support.
 
-## Remaining release qualification
+## Verified evidence from real printer reports
 
-**Accepted operating limitation — not a release blocker:** The owner
-accepts Klipper's existing G-code queue behaviour: standard Mainsail
-Pause/Cancel may wait until synchronous calibration finishes. In an
-unsafe situation, use **Emergency Stop**, which shuts down Klipper
-and invalidates any active calibration. Do not attempt ordinary Resume
-after an emergency stop; restart with normal homing and the guarded
-calibration sequence. The [optional future asynchronous design](
-RC16_PAUSE_CANCEL_INTEGRATION_DESIGN.md) is archived for reference only.
+The owner supplied six recent AutoXY reports, four with `CALIBRATED_AND_VAOC_EXITED` status and two earlier `FAILED_DO_NOT_PRINT` runs. These are **per-run calibration outcomes**, not proof that each entire print completed. Report times below follow the Pi's own stored timestamps.
 
-1. **Automatic idle retention:** the soft global image quota and protections
-   for active runs, reference images, changed reports and generated-print
-   files have offline tests. Verify that scheduled execution and its storage
-   totals behave correctly on the target Pi.
-2. **Difficult beta nozzle scenes:** original unannotated images, not
-   screenshots containing detector overlays, are needed to establish
-   correct circle choice when more than one candidate is present.
-3. **Release packaging and qualification:** keep RC15's signed package
-   manifest and README *unchanged*. The new RC16 release needs its own
-   pinned source manifest, documentation landing page, publishable version
-   and supervised operational signoff; do not merge or tag a fully
-   qualified release while the above conditions remain unresolved.
+| AutoXY run | Automatic calibration outcome | Evidence |
+| --- | --- | --- |
+| `20261112-112413_print` | Passed | Final residual X −0.01420 mm, Y −0.00099 mm |
+| `20261113-071103_print` | Passed | Final X −0.00437 mm, Y −0.00219 mm |
+| `20261113-073940_print` | Failed closed | T0 photo likeness 0.427/0.511 was above then-hard 0.380; held print and native manual recovery path exercised |
+| `20261113-074348_print` | Failed closed | T0/T1 X camera-scale disagreement 12.74% exceeded 12%; no unsafe correction authorised; manual native VAOC continuation subsequently observed |
+| `20261113-092317_print` | Passed | Two adjustments; final X +0.02260 mm, Y −0.01364 mm; two independent verification checks |
+| `20261113-231235_print` | Passed | One adjustment; final X +0.00761 mm, Y −0.00736 mm; 43/43 accepted frames geometry-only, **zero photo tie-breaks and zero HTTP retries**, two verification checks |
 
-## Readable generated G-code filenames
+This is concrete evidence of successful guarded calibrations, a fail-closed camera detection path, a scale disagreement refusal and an operator-recovered manual VAOC continuation on the owner's specific printer. It does **not** establish that targeted scale recapture works on real hardware (it was not needed in the most recent accepted run), that the camera HTTP retry path has been exercised physically, or that the beta tester's unusually ambiguous scene is handled correctly.
 
-RC16 now supports a human-readable generated filename that preserves a
-sanitised original part name and appends the **Pi-local processing date/time**
-with six digits of fractional seconds. Example:
+## Automated checks
 
-`__AutoXY_RC16_Dragon_Head_20261113-174530-123456.gcode`
+The latest pre-merge RC16 source CI completed **370 tests, 5 skipped**. CI runs without the target physical MCU, printer endstops, camera geometry, Beacon and RatOS workload; it does not replace live verification. The additional documentation/manifest checks are tracked separately from camera and motion qualification.
 
-It remains a separate generated copy; the source G-code filename and bytes
-are not renamed or overwritten. COPY/MIRROR bypass remains native; protected
-independent print-start still uses the verified source registry and one-use
-handoff. Older `__AutoXY_RC16_<24-hex>.gcode` files remain authenticated
-for reprints and age-based cleanup, and cannot be mistaken for original
-unprotected files.
+## Known limitations and work still required
 
-Already-running RC16 installations must **not** run the RC15-to-RC16
-installer. The narrowly scoped
-`scripts/rc16_timestamped_gcode_refresh.py check|install` performs
-an exact-source, idle-only three-file transaction with rollback snapshot
-and post-restart protection checks. It refuses unreviewed or mixed source
-versions and active/selected prints.
+1. **Beta tester's original nozzle scenes:** obtain and replay the **unannotated** source images and a true commissioned geometry profile. Confirm the actual nozzle is selected and the false circle refused. An overlay or owner's successful scenes are not a substitute.
+2. **Safe recovery and bypass matrix:** complete negative-path hardware testing, including direct virtual-SD entry points, wrong file/reprint, resume during hold, abort/rehome, offset invalidation and repeated two-tool prints after steppers disable. The successful native manual VAOC recovery is valuable but not an exhaustive matrix.
+3. **Storage/retention hardware evidence:** verify scheduled cleanup, soft-quota pressure, selected-file exclusions, disk-full and recovery behaviour on the actual Pi while protecting original reference JPEGs and user G-code.
+4. **Per-machine dependencies and physical commissioning:** confirm OpenCV/NumPy wheels on supported Pi architecture/Python/OS combinations, actual native VAOC capture framing, reticle position, nozzle wear and measurement repeatability.
+5. **Release packaging:** maintain an RC16-specific source inventory and release docs; verify all required source hashes/links and compatibility with the archived RC15 manifest. No blanket unattended-use release tag or certification is implied.
+6. **Accepted Pause/Cancel limitation:** ordinary Mainsail Pause/Cancel may queue during synchronous camera calibration. The owner accepts this as a known limitation, not a blocker for supervised RC16. Use Emergency Stop for unsafe motion; do not attempt a raw Resume afterward. The [asynchronous alternative](RC16_PAUSE_CANCEL_INTEGRATION_DESIGN.md) is optional future work.
 
-## November 13 capture evidence logging
+### Current installation rules
 
-The RC16 camera worker now supplies the actual accepted-frame decision and
-snapshot retry history to the gate. Every accepted record in
-`print_gate_runs/*/report.json` includes:
+- A new AutoXY-free or exactly recognised RC15 installation may be assessed with `scripts/rc16_release_install.py check`, followed by `install` **only in a supervised, safe-idle review**. Do not bypass recognition failures.
+- An already active RC16 installation must **not** rerun the RC15/fresh installer. The latest narrow telemetry updater is `scripts/rc16_vision_telemetry_refresh.py`; only run its `check` and then `install` if exact source/version and idle-state checks justify it.
+- Historical `rc16_vision_refresh.py` and `rc16_vision_reliability_refresh.py` record intermediate revisions; do not apply them on top of the current telemetry revision.
+- A main-branch documentation change is not a reason to reinstall or disturb a working supervised printer.
 
-- `appearance_evidence`: `geometry-only` or
-  `geometry-photo-tiebreak-v1`, whether photo evidence actually selected a
-  candidate, geometric/photo weights, and candidate scores where applicable.
-- `camera_http_retries`, `camera_http_attempts` and
-  `camera_http_retry_statuses`: fresh HTTP requests and observed transient
-  camera-server status codes; zero means a verified first-request success.
-- `photo_reference_available`: whether a commissioned photo fingerprint was
-  presented to the vision worker.
+### RC15 and RC16 release records
 
-Each report also accumulates `vision_reliability_summary`, including accepted
-captures, geometry-only decisions, photo tie-break uses, HTTP retry captures,
-total camera HTTP retries and worker-level attempts retried. Older worker
-results that cannot provide these details are recorded as `null` rather than
-silently reported as zero. Existing scale-recheck axes, per-axis sample
-comparisons and final discrepancy remain recorded in their established
-report fields.
-
-The additional fields are passive telemetry; they do not modify motion,
-nozzle XY offsets, photo choice thresholds, verification requirements or
-print gating.
-
-For an already active RC16 system, use
-`scripts/rc16_vision_telemetry_refresh.py check` followed by `install`
-**only while the printer is idle**. This version-aware, transactional
-installer accepts either the exact baseline RC16 vision sources or the
-previous exact RC16 vision-reliability upgrade, and rejects mixed or unknown
-installations. It snapshots and verifies the old bytes before upgrading,
-automatically restores them on a failed restart/validation, and does not
-alter user-commissioned images or original G-code files.
-
-## November 13 supervised vision reliability revisions (offline candidate)
-
-A failed original automatic calibration rejected unique Hough-located T0
-circles solely for photographic likeness (outer-rim scores 0.427/0.511
-against the previous hard 0.380 cutoff). The protected inline retry
-instead failed the **12% cross-tool camera-scale check** before offset
-measurement or correction. Manual native VAOC guarded continuation worked.
-
-Three narrow mitigations are implemented **for validation**, without
-changing the known-working XY correction algorithm, nozzle alignment
-tolerance, motion bounds, old commissioning reference files or reference
-profile format:
-
-1. **Geometry first.** A unique Hough circle satisfying the existing
-   independent coarse annulus, commissioned location and radius is no
-   longer vetoed by an appearance fingerprint. Only if **exactly two**
-   geometrically eligible circles remain does photographic evidence
-   enter a conservative 75% geometry / 25% photograph score. Unresolved
-   pairs fail closed. The signed RC15 detector file is untouched;
-   RC16 imports the separate `auto_xy_detector_rc16.py`.
-2. **Camera-scale uncertainty.** When T0/T1 physical-motion-to-pixel
-   scale disagrees by more than the existing 12%, only the suspect
-   axis is repeated: two complete 3-point sweeps per tool, with origin,
-   fitting, within-tool repeatability and cross-tool consistency checks.
-   No XY offsets are written during recapture. If the new evidence is
-   inconsistent the same protected print remains held and manual VAOC
-   remains available.
-3. **HTTP camera errors.** A snapshot request with server HTTP
-   500/502/503/504 can make two additional fresh HTTP requests within
-   the original capture timeout. It never reuses stale JPEGs and leaves
-   detector-rejection errors untouched.
-
-The existing installed RC16 is **not** upgraded with any full RC15/RC16
-installer. The pinned script
-`scripts/rc16_vision_reliability_refresh.py check` and then `install`
-is an idle-only, rollback-verified update that replaces three known
-RC16 modules and adds one new RC16-only detector. It refuses modified,
-mixed or unknown installed source versions. Both CI and real original
-frame replay are required before qualifying these revisions for
-unattended printing.
-
-## Installation and operator information
-
-Existing RC16 must not be overwritten by the old RC15 or fresh RC16
-installer. The reviewed RC16 likeness update has its own
-`scripts/rc16_vision_refresh.py` read-only check and transactional
-idle-only one-file refresh. No new nozzle commissioning is required for
-that update. Follow the
-[first supervised trial documentation](RC16_FIRST_COMPLETE_TRIAL.md)
-for operator workflow and limitations.
-
-The original RC15 README remains exactly as published and is included in
-its integrity manifest. Do not rewrite it as part of an RC16 document update.
+The exact RC15 Dev6 release remains available on [`release/rc15-dev6-frozen`](https://github.com/peteoak/ratos-vaoc-auto-xy/tree/release/rc15-dev6-frozen). Its original README and manifest are also copied to `docs/legacy/` for provenance. The **root `MANIFEST.json` exists for RC15 compatibility checks**, not as a claim that RC16's current files are in the historical RC15 archive. See [current source inventory](RC16_SOURCE_MANIFEST.json) and [historical index](HISTORICAL_DOCUMENTS.md).

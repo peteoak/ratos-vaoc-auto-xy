@@ -1,5 +1,7 @@
 # RC16 protected calibration — responsive Pause/Cancel design
 
+> **HISTORICAL ENGINEERING RECORD — not current installation or operational guidance.** Unimplemented optional asynchronous design; the accepted current runtime still uses synchronous calibration and may queue ordinary Mainsail Pause/Cancel. For current behaviour and remaining qualification use [RC16 Start Here](RC16_START_HERE.md) and [RC16 Release Status](RC16_RELEASE_STATUS.md).
+
 **Status:** Optional future architecture only. **Not installed or active.**
 The owner has explicitly accepted standard Klipper Pause/Cancel command queueing
 as an RC16 operating limitation, with Emergency Stop for unsafe conditions.
