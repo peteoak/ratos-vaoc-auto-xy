@@ -110,6 +110,7 @@ def install_fresh(home, root, *, live,
             os.fsync(stream.fileno())
         if live:
             restart()
+            active.wait_for_klipper_ready()
             # Fresh commissioning is required before real nozzle correction,
             # but protection is ACTIVE; no disabled or measure-only stage.
             if activate is None:
@@ -124,6 +125,7 @@ def install_fresh(home, root, *, live,
                 rollback_fresh(home, prior, current, live=live)
                 if live:
                     restart()
+                    active.wait_for_klipper_ready()
                     # A fresh installation can create persistent AutoXY
                     # enable flags before its post-restart verification fails.
                     # Roll them back after the original Klipper is restored,
@@ -239,6 +241,10 @@ def main(argv=None):
                     if python == standard / 'bin/python' and not python.is_file():
                         print('NOTICE: Installer will provision missing isolated camera venv from binary wheels')
                 return 0
+            # Sudo must be authorized before ANY printer or venv files change.
+            # The interactive prompt goes directly to the SSH TTY, not the log.
+            if not opts.offline:
+                active.authorize_restart()
             kind, receipt = install_complete_with_vision(home, root, live=not opts.offline)
             print('RC16 single-transaction active installation COMPLETE:', kind)
             print('Rollback snapshot:', receipt)

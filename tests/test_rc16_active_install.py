@@ -57,6 +57,10 @@ class ActiveInstallerTests(unittest.TestCase):
         self.real_saved_state = installer.saved_state
         self.real_read_migration_state = installer.read_migration_state
         self.real_restore = installer.restore_saved_state
+        self.real_wait_for_ready = installer.wait_for_klipper_ready
+        readiness_guard = patch.object(installer, 'wait_for_klipper_ready')
+        readiness_guard.start()
+        self.addCleanup(readiness_guard.stop)
         self.mock_original_state = {
             'flags': {key: 0 for key in installer.MIGRATED_FLAGS},
             'offsets': {'idex_xoffset': -0.1,
@@ -341,6 +345,84 @@ class ActiveInstallerTests(unittest.TestCase):
                 [call.args[0] for call in send.call_args_list],
                 ['SAVE_VARIABLE VARIABLE=auto_xy_v2_enabled VALUE=0',
                  'SAVE_VARIABLE VARIABLE=auto_xy_v2_measure_only VALUE=1'])
+
+
+    def test_restart_uses_password_capable_sudo(self):
+        with patch.object(installer.subprocess, 'run') as run:
+            installer.restart_klipper()
+        self.assertEqual(run.call_args.args[0],
+                         ('sudo', 'systemctl', 'restart', 'klipper'))
+        self.assertNotIn('-n', run.call_args.args[0])
+
+    def test_restart_failure_reports_error(self):
+        with patch.object(installer.subprocess, 'run',
+                          side_effect=installer.subprocess.CalledProcessError(
+                              1, 'sudo')) as run:
+            with self.assertRaisesRegex(installer.InstallationError,
+                                        'Klipper service restart failed'):
+                installer.restart_klipper()
+        run.assert_called_once()
+
+    def test_authentication_preflight_refuses_missing_tty(self):
+        with patch('builtins.open', side_effect=OSError('No controlling TTY')), \
+             patch.object(installer.subprocess, 'run') as run:
+            with self.assertRaisesRegex(installer.InstallationError,
+                                        'no files changed'):
+                installer.authorize_restart()
+        run.assert_not_called()
+
+    def test_authentication_invokes_interactive_sudo_validation(self):
+        from unittest.mock import mock_open
+        with patch('builtins.open', mock_open(read_data='')) as tty, \
+             patch.object(installer.os, 'isatty', return_value=True), \
+             patch.object(installer.subprocess, 'run') as run:
+            installer.authorize_restart()
+        tty.assert_called_once_with('/dev/tty', 'rb')
+        self.assertEqual(run.call_args.args[0], ('sudo', '-v'))
+        self.assertNotIn('-n', run.call_args.args[0])
+
+
+    def test_wait_for_ready_retries_503_until_connected(self):
+        from urllib.error import HTTPError
+        status = {'result': {'status': {
+            'save_variables': {'variables': {'auto_xy_v2_enabled': 1}}}}}
+        replies = iter([
+            HTTPError(installer.INFO_URL, 503,
+                      'Klippy Host not connected', {}, None),
+            {'result': {'state': 'startup'}},
+            {'result': {'state': 'ready'}},
+            status,
+        ])
+        def answer(url):
+            value = next(replies)
+            if isinstance(value, Exception):
+                raise value
+            return value
+        with patch.object(installer, 'query_json', side_effect=answer) as query:
+            self.real_wait_for_ready(timeout=10, sleep=lambda _: None)
+        self.assertEqual(query.call_count, 4)
+
+    def test_wait_for_ready_rejects_klipper_shutdown(self):
+        with patch.object(installer, 'query_json',
+                          return_value={'result': {
+                              'state': 'shutdown',
+                              'state_message': 'simulated config failure'}}):
+            with self.assertRaisesRegex(installer.InstallationError,
+                                        'simulated config failure'):
+                self.real_wait_for_ready(timeout=1, sleep=lambda _: None)
+
+    def test_wait_for_ready_requires_saved_variables(self):
+        sequence = iter([
+            {'result': {'state': 'ready'}},
+            {'result': {'status': {'save_variables': {}}}},
+            {'result': {'state': 'ready'}},
+            {'result': {'status': {'save_variables': {
+                'variables': {'auto_xy_v2_enabled': 1}}}}},
+        ])
+        with patch.object(installer, 'query_json',
+                          side_effect=lambda _: next(sequence)) as query:
+            self.real_wait_for_ready(timeout=10, sleep=lambda _: None)
+        self.assertEqual(query.call_count, 4)
 
 
 if __name__ == '__main__':

@@ -27,21 +27,23 @@ INCLUDE = '[include auto_xy_rc16.cfg]'
 RC15_INCLUDE = '[include auto_xy.cfg]'
 SOURCES = {
     'auto_xy/klipper/auto_xy_gate.py':
-        ('src/auto_xy_gate_rc16.py', '5a569655c9edecfb41549bdf468e208abdaf1356'),
+        ('src/auto_xy_gate_rc16.py', '6df74b61f3f651b05b9d36a5fed12d4ff2c427f0'),
     'auto_xy/vision/auto_xy_retention_rc16.py':
         ('src/auto_xy_retention_rc16.py', '4952971240a17c187a7a80a5f696d4d520ea5fdc'),
     'auto_xy/klipper/auto_xy_ratos_handoff_rc16.py':
-        ('src/auto_xy_ratos_handoff_rc16.py', 'ea3ce0355639250aeceeaa49e7d6097066ae7141'),
+        ('src/auto_xy_ratos_handoff_rc16.py', '3471e280972ab95df74680c5baaeaec299f46ba0'),
     'auto_xy/workers/rc16_prepare_worker.py':
-        ('src/tools/rc16_prepare_worker.py', '32852157d0e2cf3e2d1133bbfe2bad8720fa1f73'),
+        ('src/tools/rc16_prepare_worker.py', 'f85b20eb8ca28ecefa14fa065f0806de0bb402ec'),
     'auto_xy/workers/rc16_generated_retention.py':
-        ('src/tools/rc16_generated_retention.py', '300d82cd49a45fb365dd8dbb0b6ee6f1634b9a14'),
+        ('src/tools/rc16_generated_retention.py', '6ea0cd231f42901700af70f3e1b6afd968717111'),
     'auto_xy/vision/auto_xy_commission_candidates_rc16.py':
         ('src/auto_xy_commission_candidates_rc16.py', '27028efe316511ddce869685491b8228005e20ce'),
     'auto_xy/vision/auto_xy_reference_signature_rc16.py':
-        ('src/auto_xy_reference_signature_rc16.py', '021799053569ef4780c74ae6d6756ccd74f00ba0'),
+        ('src/auto_xy_reference_signature_rc16.py', '1350573fc9052a3ccd8639d2a109a1555964de97'),
+    'auto_xy/vision/auto_xy_detector_rc16.py':
+        ('src/auto_xy_detector_rc16.py', 'e44207a3da584961031280f6332a597326dc5e63'),
     'auto_xy/vision/auto_xy_vision_worker.py':
-        ('src/auto_xy_vision_worker_rc16.py', 'eb11b30bafeee1f88bc44ffba10c6c73741b1a0b'),
+        ('src/auto_xy_vision_worker_rc16.py', 'a85e68d019a9317cde6ed6aaaba89f012ee8d99d'),
     'auto_xy/workers/rc16_recommission_worker.py':
         ('src/tools/rc16_recommission_worker.py', '73d9b940fe580eac33671b27e91c3f0c39d3fc30'),
     'auto_xy/workers/rc16_reference_retention.py':

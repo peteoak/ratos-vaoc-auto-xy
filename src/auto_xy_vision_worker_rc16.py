@@ -12,9 +12,10 @@ from pathlib import Path
 import sys
 import time
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 import cv2
-from auto_xy_detector import detect, register_nozzle_features
-from auto_xy_reference_signature_rc16 import compare as compare_nozzle_signature
+from auto_xy_detector_rc16 import detect, register_nozzle_features
+from auto_xy_reference_signature_rc16 import select_ambiguous_pair
 
 MAX_REQUEST_BYTES = 8192
 
@@ -40,8 +41,29 @@ def capture(a):
     image.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
     req = Request(a.url, headers={'Accept': 'image/jpeg', 'Cache-Control': 'no-cache'})
-    with urlopen(req, timeout=a.timeout) as res:
-        data = res.read(12_000_001)
+    # HTTP 500/502/503/504 are transient camera-server errors, not
+    # permission to reuse any prior JPEG. Each retry is a NEW HTTP request.
+    # Keep the total time within the configured capture timeout.
+    deadline = t0 + a.timeout
+    camera_retries = 0
+    camera_retry_statuses = []  # failed HTTP responses preceding a fresh successful JPEG
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ValueError('Camera snapshot timed out after fresh HTTP retries')
+        try:
+            with urlopen(req, timeout=remaining) as res:
+                data = res.read(12_000_001)
+            break
+        except HTTPError as exc:
+            if exc.code not in (500, 502, 503, 504) or camera_retries >= 2:
+                raise
+            camera_retries += 1
+            camera_retry_statuses.append(int(exc.code))
+            remaining = deadline - time.monotonic()
+            if remaining <= .05:
+                raise
+            time.sleep(min(.15 * camera_retries, max(0., remaining - .05)))
     fetched = time.monotonic()
     if (not 1000 < len(data) <= 12_000_000 or not data.startswith(b'\xff\xd8')
             or not data.endswith(b'\xff\xd9')):
@@ -51,22 +73,37 @@ def capture(a):
     expected_center = None
     if a.expected_center is not None:
         expected_center = [float(k) for k in a.expected_center.split(',')]
+    appearance = {'method': 'geometry-only', 'matched': True,
+                  'used_for_selection': False, 'photo_weight': 0.0,
+                  'candidate_count': 1}
+    selector = None
+    if getattr(a, 'expected_signature', None):
+        if a.detector_mode != 'two_stage_roi':
+            raise ValueError('Nozzle reference tie-break requires qualified two_stage_roi detector')
+        signature = json.loads(a.expected_signature)
+        # Photo evidence is NEVER evaluated for a unique geometry candidate.
+        # Only two independently plausible Hough circles may call selector.
+        def selector(circles, coarse, commissioned_center, commissioned_radius):
+            chosen, evidence = select_ambiguous_pair(
+                image, circles, signature, coarse, commissioned_center,
+                commissioned_radius)
+            appearance.update(evidence)
+            appearance['candidate_count'] = 2
+            appearance['chosen_candidate_index'] = chosen
+            return chosen
     circle = detect(image, roi=roi, annotate=image.with_name('detected_' + image.name),
                     expected_center=expected_center, expected_radius=a.expected_radius,
-                    detector_mode=a.detector_mode)
+                    detector_mode=a.detector_mode, ambiguous_selector=selector)
     detected = time.monotonic()
     if not 115 <= float(circle[2]) <= 185:
         raise ValueError('Nozzle circle radius invalid')
-    appearance = None
-    if getattr(a, 'expected_signature', None):
-        if a.detector_mode != 'two_stage_roi':
-            raise ValueError('Nozzle image signature requires qualified two_stage_roi detector')
-        appearance = compare_nozzle_signature(
-            image, circle[:2], circle[2], json.loads(a.expected_signature))
     result = {'center_px': [float(circle[0]), float(circle[1])],
-              'radius_px': float(circle[2]), 'sha256': hashlib.sha256(data).hexdigest()}
-    if appearance is not None:
-        result['appearance_evidence'] = appearance
+              'radius_px': float(circle[2]), 'sha256': hashlib.sha256(data).hexdigest(),
+              'camera_http_retries': camera_retries,
+              'camera_http_attempts': camera_retries + 1,
+              'camera_http_retry_statuses': camera_retry_statuses,
+              'photo_reference_available': bool(getattr(a, 'expected_signature', None)),
+              'appearance_evidence': appearance}
     if a.registration_anchor:
         anchor_center = [float(k) for k in a.registration_anchor_center.split(',')]
         registration = register_nozzle_features(a.registration_anchor, image,

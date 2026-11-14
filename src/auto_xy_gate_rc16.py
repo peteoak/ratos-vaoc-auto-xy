@@ -1066,10 +1066,58 @@ class AutoXYGate:
                     }
                     if isinstance(snap_start,(int,float)):
                         self._diag_previous_snapshot_started_s=snap_start
+                # Persist the worker's actual photographic decision, even
+                # with optional motion diagnostics disabled. None means an
+                # older worker did not provide the field; never guess zero.
+                photo=data.get('appearance_evidence')
+                if photo is not None and not isinstance(photo,dict):
+                    raise ValueError('Invalid image appearance evidence')
+                http_retries=data.get('camera_http_retries')
+                http_attempts=data.get('camera_http_attempts')
+                http_statuses=data.get('camera_http_retry_statuses')
+                if http_retries is not None and (
+                        type(http_retries) is not int or not 0<=http_retries<=2):
+                    raise ValueError('Invalid camera HTTP retry count')
+                if http_attempts is not None and (
+                        type(http_attempts) is not int or
+                        http_attempts!=http_retries+1):
+                    raise ValueError('Invalid camera HTTP attempt count')
+                if http_statuses is not None and (
+                        not isinstance(http_statuses,list) or
+                        len(http_statuses)!=http_retries or
+                        any(type(x) is not int or x not in (500,502,503,504)
+                            for x in http_statuses)):
+                    raise ValueError('Invalid camera HTTP retry status history')
+                if photo is not None and (
+                        type(photo.get('used_for_selection')) is not bool or
+                        photo.get('matched') is not True):
+                    raise ValueError('Invalid nozzle photo decision evidence')
+                # Aggregate only verified values. Fail-closed camera
+                # semantics are unchanged; a retry does not reuse a JPEG.
+                totals=self.report.setdefault('vision_reliability_summary',{
+                    'accepted_captures':0,'photo_tiebreak_captures':0,
+                    'geometry_only_captures':0,'http_retry_captures':0,
+                    'http_retries_total':0,'worker_retries_total':0})
+                totals['accepted_captures']+=1
+                totals['worker_retries_total']+=attempt
+                if photo is not None:
+                    if photo['used_for_selection']:
+                        totals['photo_tiebreak_captures']+=1
+                    elif photo.get('method')=='geometry-only':
+                        totals['geometry_only_captures']+=1
+                if http_retries is not None:
+                    totals['http_retries_total']+=http_retries
+                    if http_retries:
+                        totals['http_retry_captures']+=1
                 self.record('captures',label=label,tool=self.active,
                             center_px=point,radius_px=data['radius_px'],
                             image=image,sha256=data['sha256'],attempt=attempt+1,
                             registration=data.get('registration'),
+                            appearance_evidence=photo,
+                            camera_http_retries=http_retries,
+                            camera_http_attempts=http_attempts,
+                            camera_http_retry_statuses=http_statuses,
+                            photo_reference_available=data.get('photo_reference_available'),
                             **({'camera_diagnostics':capture_diag} if capture_diag is not None else {}))
                 self.report.setdefault('timings',[]).append(
                     {'kind':'capture','label':label,
@@ -1154,51 +1202,110 @@ class AutoXYGate:
         mean=avg(samples)
         scatter=max(norm(vecsub(s,mean)) for s in samples)
         return mean,scatter
-    def calibrate(self,tool):
+    def _capture_scale_axis(self,tool,axis,label_prefix='cal'):
+        # Same proven three-position, full-resolution camera scale fit.
+        # Rechecks use the exact same movement and physical safety envelope.
         self.select(tool)
         self.approach()
-        cols=[]; intercept=[]; residual=[]
-        for axis in ('x','y'):
-            points=[]
-            # Re-establish an independent Hough-located first image for EACH
-            # axis, then register each subsequent image against the nearest
-            # accepted point (0.2 mm step instead of a 0.4+ mm jump).
-            # All returned centres remain ABSOLUTE coordinates in the single
-            # stationary camera image. Do not sum incremental displacements.
-            registration_anchor=None
-            self.move(axis,-.25)
-            for d in (-.2,0.,.2):
-                self.move(axis,d)
-                label='cal_t%d_%s_%+.1f'%(tool,axis,d)
-                if registration_anchor is not None:
-                    c=self.worker_capture(label,registration_anchor=registration_anchor)
-                else:
-                    c=self.worker_capture(label)
-                if self.camera_registration_enabled:
-                    capture=self.report['captures'][-1]
-                    # The matching worker reports the coordinate directly
-                    # in the fixed camera frame. Each anchor is an actual
-                    # accepted image, never a projected or synthetic frame.
-                    registration_anchor=(capture['image'],list(c))
-                points.append((d,c))
-            self.move(axis,0.);self.approach()
-            xs=[x for x,y in points]
-            ys=[y for x,y in points]
-            xm=sum(xs)/3.
-            denom=sum((x-xm)**2 for x in xs)
-            slopes=[sum((xs[k]-xm)*(ys[k][j]-sum(t[j] for t in ys)/3.) for k in range(3))/denom for j in (0,1)]
-            zeros=[sum(y[j] for y in ys)/3.-slopes[j]*xm for j in (0,1)]
-            cols.append(slopes);intercept.append(zeros)
-            for x,y in points: residual.append(vecsub(y,vecadd(zeros,vecmul(slopes,x))))
-        matrix=[[cols[0][0],cols[1][0]],[cols[0][1],cols[1][1]]]
+        points=[]
+        registration_anchor=None
+        self.move(axis,-.25)
+        for d in (-.2,0.,.2):
+            self.move(axis,d)
+            label='%s_t%d_%s_%+.1f'%(label_prefix,tool,axis,d)
+            c=self.worker_capture(label,registration_anchor=registration_anchor)
+            if self.camera_registration_enabled:
+                capture=self.report['captures'][-1]
+                registration_anchor=(capture['image'],list(c))
+            points.append((d,c))
+        self.move(axis,0.)
+        self.approach()
+        xs=[p[0] for p in points]
+        ys=[p[1] for p in points]
+        xm=sum(xs)/3.
+        denom=sum((x-xm)**2 for x in xs)
+        slope=[sum((xs[k]-xm)*(ys[k][j]-sum(t[j] for t in ys)/3.)
+                   for k in range(3))/denom for j in (0,1)]
+        zero=[sum(y[j] for y in ys)/3.-slope[j]*xm for j in (0,1)]
+        residual=[vecsub(y,vecadd(zero,vecmul(slope,x))) for x,y in points]
+        return {'slope':slope,'zero':zero,'residual':residual}
+
+    def calibrate(self,tool):
+        x=self._capture_scale_axis(tool,'x')
+        y=self._capture_scale_axis(tool,'y')
+        matrix=[[x['slope'][0],y['slope'][0]],
+                [x['slope'][1],y['slope'][1]]]
         if abs(det(matrix))<100:raise GateAbort('Camera matrix invalid')
-        if not all(130<=norm(c)<=700 for c in cols):raise GateAbort('Camera scale implausible')
-        fit=max(norm(solve(matrix,r)) for r in residual)
-        zero_gap=norm(solve(matrix,vecsub(intercept[0],intercept[1])))
-        self.record('calibrations',tool=tool,matrix=matrix,fit_mm=fit,zero_gap_mm=zero_gap)
+        if not all(130<=norm(c['slope'])<=700 for c in (x,y)):
+            raise GateAbort('Camera scale implausible')
+        fit=max(norm(solve(matrix,r))
+                for c in (x,y) for r in c['residual'])
+        zero_gap=norm(solve(matrix,vecsub(x['zero'],y['zero'])))
+        self.record('calibrations',tool=tool,matrix=matrix,fit_mm=fit,
+                    zero_gap_mm=zero_gap)
         if fit>self.tol or zero_gap>self.tol:
             raise GateAbort('Camera scale fit/zero repeatability failed (%.4f/%.4f mm)'%(fit,zero_gap))
+        if not hasattr(self,'_scale_axis_baselines'):
+            self._scale_axis_baselines={}
+        self._scale_axis_baselines[tool]={'x':x,'y':y}
         return matrix
+
+    def _scale_disagreement(self,m0,m1):
+        discrepancy=[]
+        for j in (0,1):
+            a=[m0[0][j],m0[1][j]]
+            b=[m1[0][j],m1[1][j]]
+            discrepancy.append(norm(vecsub(a,b))/max(.1,norm(vecmul(vecadd(a,b),.5))))
+        return discrepancy
+
+    def _targeted_scale_recheck(self,matrices,discrepancy):
+        # A cross-tool discrepancy is a measurement-input question, NOT an
+        # XY nozzle-offset failure. Never change saved/runtime offsets here.
+        # Retry ONLY suspect axes; two independent full three-point sweeps
+        # per tool must agree with EACH OTHER and the other axis zero origin.
+        axes=[axis for i,axis in enumerate(('x','y')) if discrepancy[i]>.12]
+        self.report['camera_scale_recheck_axes']=axes
+        self.report['camera_scale_initial_disagreement_percent']=[
+            round(q*100.,3) for q in discrepancy]
+        adjusted=[[row[:] for row in matrix] for matrix in matrices]
+        for axis in axes:
+            j=0 if axis=='x' else 1
+            other='y' if axis=='x' else 'x'
+            for tool in (0,1):
+                baseline=self._scale_axis_baselines[tool][other]
+                sweeps=[self._capture_scale_axis(tool,axis,
+                         'scale_recheck%d'%cycle) for cycle in (1,2)]
+                slopes=[item['slope'] for item in sweeps]
+                mean=avg(slopes)
+                relative=norm(vecsub(slopes[0],slopes[1]))/max(.1,norm(mean))
+                trial=[[adjusted[tool][r][k] for k in (0,1)]
+                       for r in (0,1)]
+                for row in (0,1):
+                    trial[row][j]=mean[row]
+                if abs(det(trial))<100 or not 130<=norm(mean)<=700:
+                    raise GateAbort('Camera scale targeted recheck invalid')
+                fit=max(norm(solve(trial,residual))
+                        for sample in sweeps for residual in sample['residual'])
+                within_axis_zero=norm(solve(trial,vecsub(
+                    sweeps[0]['zero'],sweeps[1]['zero'])))
+                cross_axis_zero=max(norm(solve(trial,vecsub(
+                    sample['zero'],baseline['zero']))) for sample in sweeps)
+                self.record('camera_scale_rechecks',tool=tool,axis=axis,
+                            slopes_px_per_mm=slopes,relative_repeat_difference=relative,
+                            fit_mm=fit,zero_repeat_mm=within_axis_zero,
+                            cross_axis_zero_mm=cross_axis_zero)
+                if (relative>.06 or fit>self.tol or
+                        within_axis_zero>self.tol or cross_axis_zero>self.tol):
+                    raise GateAbort('Camera scale targeted recheck not repeatable')
+                for row in (0,1):
+                    adjusted[tool][row][j]=mean[row]
+        final=self._scale_disagreement(*adjusted)
+        self.report['camera_scale_recheck_disagreement_percent']=[
+            round(q*100.,3) for q in final]
+        if max(final)>.12:
+            raise GateAbort('T0/T1 camera scale disagreement > 12% after targeted recheck')
+        return adjusted[0],adjusted[1],final
+
     def measure(self,m,label):
         centres=[];scatter=[]
         for tool,tag in ((0,'t0_start'),(1,'t1'),(0,'t0_return')):
@@ -1382,6 +1489,7 @@ class AutoXYGate:
             desc.startswith('Camera/nozzle detection failed at '),
             (self._protected_inside_gate and desc.startswith('MEASURE_ONLY alignment outside tolerance')),
             desc.startswith('Camera scale fit/zero repeatability failed'),
+            desc.startswith('Camera scale targeted recheck'),
             desc.startswith('Camera return/scatter exceeds tolerance'),
             desc.startswith('Initial toolshift settling failed:'),
             desc.startswith('Verification limit reached'),
@@ -2079,12 +2187,14 @@ class AutoXYGate:
             gcmd.respond_info('AUTO XY: measuring live camera scale T0/T1')
             self.progress_stage(gcmd,'SCALING','Measuring T0 and T1 camera scale')
             self.worker_capture('preflight_t0')
+            self._scale_axis_baselines={}
             m0=self.calibrate(0);m1=self.calibrate(1)
-            discrepancy=[]
-            for j in (0,1):
-                a=[m0[0][j],m0[1][j]];b=[m1[0][j],m1[1][j]]
-                discrepancy.append(norm(vecsub(a,b))/max(.1,norm(vecmul(vecadd(a,b),.5))))
-            if max(discrepancy)>.12: raise GateAbort('T0/T1 camera scale disagreement > 12%')
+            discrepancy=self._scale_disagreement(m0,m1)
+            if max(discrepancy)>.12:
+                self.progress_stage(gcmd,'SCALING',
+                                    'Disagreement: rechecking suspect camera axis without offset writes')
+                m0,m1,discrepancy=self._targeted_scale_recheck(
+                    (m0,m1),discrepancy)
             mat=[[.5*(m0[i][j]+m1[i][j]) for j in (0,1)] for i in (0,1)]
             self.report['camera_transform']=mat
             self.report['camera_disagreement_percent']=[round(q*100,3) for q in discrepancy]

@@ -38,6 +38,76 @@ class GeneratedRetentionTests(unittest.TestCase):
         os.utime(self.file, (old, old))
         os.utime(self.record, (old, old))
 
+    def test_timestamped_registered_file_expires_only_when_owned(self):
+        token = 'Dragon_Head_20261113-174530-123456'
+        new_name = '__AutoXY_RC16_' + token + '.gcode'
+        file = self.root / new_name
+        record = self.registry / (token + '.json')
+        file.write_bytes(self.original)
+        record.write_text(json.dumps({
+            'schema': 1, 'stage_name': new_name,
+            'source': 'original.gcode', 'source_sha256': 'a'*64,
+            'output_sha256': hashlib.sha256(self.original).hexdigest()}))
+        old = self.now - 31 * 86400
+        os.utime(file, (old, old))
+        os.utime(record, (old, old))
+        eligible = ret.candidates(self.root, self.registry, now=self.now)
+        self.assertIn(file, [item[0] for item in eligible])
+        result = ret.clean(self.root, self.registry, execute=True, auto=True,
+                           now=self.now, idle_probe=lambda: True)
+        self.assertEqual(result['deleted_count'], 2)
+        self.assertFalse(file.exists())
+        self.assertFalse(record.exists())
+
+    def test_timestamped_pending_stage_is_protected_after_final_registration(self):
+        token = 'Dragon_Head_20261113-174530-654321'
+        name = '__AutoXY_RC16_' + token + '.gcode'
+        stage = self.root / name
+        marker = self.registry / (token + '.pending.json')
+        final = self.registry / (token + '.json')
+        stage.write_bytes(self.original)
+        marker.write_text(json.dumps({
+            'schema': 1, 'kind': 'autoxy_pending_stage',
+            'stage_name': name, 'bytes': len(self.original),
+            'sha256': hashlib.sha256(self.original).hexdigest()
+        }))
+        final.write_text(json.dumps({
+            'schema': 1, 'stage_name': name, 'source': 'original.gcode',
+            'source_sha256': 'a'*64,
+            'output_sha256': hashlib.sha256(self.original).hexdigest()
+        }))
+        old = self.now - 31 * 86400
+        for path in (stage, marker, final):
+            os.utime(path, (old, old))
+        self.assertEqual(ret.pending_candidates(
+            self.root, self.registry, now=self.now), [])
+        result = ret.clean(self.root, self.registry, execute=True, auto=True,
+                           now=self.now, idle_probe=lambda: True)
+        self.assertTrue(marker.exists())
+        self.assertFalse(final.exists())
+        self.assertFalse(stage.exists())
+
+    def test_timestamped_pending_without_final_can_expire(self):
+        token = 'Dragon_Head_20261113-174530-000123'
+        stage = self.root / ('__AutoXY_RC16_' + token + '.gcode')
+        marker = self.registry / (token + '.pending.json')
+        stage.write_bytes(self.original)
+        marker.write_text(json.dumps({
+            'schema': 1, 'kind': 'autoxy_pending_stage',
+            'stage_name': stage.name, 'bytes': len(self.original),
+            'sha256': hashlib.sha256(self.original).hexdigest()
+        }))
+        old = self.now - 31 * 86400
+        os.utime(stage, (old, old))
+        os.utime(marker, (old, old))
+        self.assertIn(stage, [x[0] for x in ret.pending_candidates(
+            self.root, self.registry, now=self.now)])
+        result = ret.clean(self.root, self.registry, execute=True, auto=True,
+                           now=self.now, idle_probe=lambda: True)
+        self.assertEqual(result['pending_deleted_count'], 1)
+        self.assertFalse(stage.exists())
+        self.assertFalse(marker.exists())
+
     def test_default_dry_run_never_deletes(self):
         result = ret.clean(self.root, self.registry, now=self.now)
         self.assertTrue(result['dry_run'])

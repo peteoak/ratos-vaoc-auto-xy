@@ -17,6 +17,9 @@ spec.loader.exec_module(release)
 
 class ReleaseInstallTests(unittest.TestCase):
     def setUp(self):
+        ready_guard = patch.object(release.active, 'wait_for_klipper_ready')
+        ready_guard.start()
+        self.addCleanup(ready_guard.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name) / 'pi'

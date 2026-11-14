@@ -22,7 +22,7 @@ INFO_URL = 'http://127.0.0.1:7125/printer/info'
 CONFIG_URL = ('http://127.0.0.1:7125/printer/objects/query?'
               'configfile&auto_xy_ratos_handoff_rc16&auto_xy_recommission_rc16&save_variables')
 SAVED_URL = 'http://127.0.0.1:7125/printer/objects/query?save_variables'
-RESTART_COMMAND = ('sudo', '-n', 'systemctl', 'restart', 'klipper')
+RESTART_COMMAND = ('sudo', 'systemctl', 'restart', 'klipper')
 GCODE_URL = 'http://127.0.0.1:7125/printer/gcode/script'
 
 
@@ -42,14 +42,80 @@ SAFETY_FLAGS = (
 MIGRATION_ARCHIVE = 'pre-rc16-saved-state.json'
 
 
+def authorize_restart():
+    """Obtain sudo authentication from the operator BEFORE modifying files.
+
+    No password is collected by AutoXY or written to installation logs.
+    sudo uses the SSH controlling TTY and its normal credential cache.
+    Refuse a noninteractive session before a rollback could depend on sudo.
+    """
+    try:
+        with open('/dev/tty', 'rb') as tty:
+            if not os.isatty(tty.fileno()):
+                raise InstallationError('Interactive SSH terminal required for sudo')
+            subprocess.run(('sudo', '-v'), stdin=tty, check=True, timeout=120,
+                           stdout=subprocess.DEVNULL)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise InstallationError(
+            'Klipper restart authorization failed. Run from interactive SSH '
+            'and enter your sudo password when prompted; no files changed.'
+        ) from exc
+
+
 def restart_klipper():
-    subprocess.run(RESTART_COMMAND, check=True, timeout=45,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    """Allow sudo to prompt on /dev/tty again if the credential expires."""
+    try:
+        subprocess.run(RESTART_COMMAND, check=True, timeout=120,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        raise InstallationError(
+            'Klipper service restart failed (sudo or systemctl): %s' % exc
+        ) from exc
 
 
 def query_json(url):
     with urlopen(url, timeout=5) as response:
         return json.load(response)
+
+
+def wait_for_klipper_ready(timeout=120, sleep=time.sleep):
+    """Wait through Moonraker's 503 gap after a Klipper service restart.
+
+    A successful systemctl return does not mean Moonraker has reconnected.
+    Require both printer/info READY and readable saved variables before any
+    activation, stale-state migration or rollback state restoration.
+    Retry only transient transport/incomplete-status failures; reject a
+    confirmed Klipper error/shutdown immediately. Never issue motion/G-code.
+    """
+    deadline = time.monotonic() + timeout
+    last = 'Moonraker has not reconnected to Klipper'
+    while True:
+        try:
+            info = query_json(INFO_URL).get('result', {})
+            state = str(info.get('state', '')).strip().lower()
+            if state in ('error', 'shutdown'):
+                raise InstallationError(
+                    'Klipper entered %s during restart: %s' %
+                    (state, info.get('state_message', 'no details')))
+            if state == 'ready':
+                status = query_json(SAVED_URL)['result']['status']
+                variables = status.get('save_variables', {}).get('variables')
+                if isinstance(variables, dict):
+                    return
+                last = 'Klipper ready, saved variables not yet readable'
+            else:
+                last = 'Klipper state: ' + (state or 'unavailable')
+        except InstallationError:
+            raise
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            last = '%s: %s' % (type(error).__name__, error)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        sleep(min(2, remaining))
+    raise InstallationError(
+        'Klipper did not become Ready after restart within %ss: %s' %
+        (timeout, last))
 
 
 def post_gcode(script):
@@ -275,6 +341,7 @@ def install(home, root, *, live, restart=restart_klipper,
         if live:
             archive_migration_state(receipt, original_flags)
             restart()
+            wait_for_klipper_ready()
             # Only after RC16 is loaded, verify the handoff before mutating
             # any saved flags. An idle no-held-print check still applies.
             reset_stale_flags(original_flags)
@@ -285,6 +352,7 @@ def install(home, root, *, live, restart=restart_klipper,
             upgrade.rollback(home, receipt, live=False)
             if live:
                 restart()
+                wait_for_klipper_ready()
                 restore_saved_state(original_flags)
         except BaseException as rollback_error:
             raise InstallationError(

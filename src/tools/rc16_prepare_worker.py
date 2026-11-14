@@ -18,6 +18,9 @@ import time
 from pathlib import Path
 
 PREFIX = '__AutoXY_RC16_'
+# Support old opaque names and new readable names with Pi-local timestamps.
+GENERATED_ID = r'(?:[0-9a-f]{24}|[A-Za-z0-9][A-Za-z0-9_-]{0,59}_[0-9]{8}-[0-9]{6}-[0-9]{6})'
+GENERATED_FILE = re.compile(r'^' + re.escape(PREFIX) + r'(' + GENERATED_ID + r')\.gcode$')
 MARKER = b'; AutoXY v0.5 protected pre-Beacon two-phase start'
 HEADER = re.compile(rb'^; processed by RatOS\.PostProcessor 1\.0\.0 .*\bidex\s*$', re.I)
 HEADER_ANY = re.compile(rb'^; processed by RatOS\.PostProcessor\b', re.I)
@@ -56,7 +59,7 @@ def safe_path(root, relative, generated=False):
             raise Refuse('Symlinked G-code path')
     if not current.is_file():
         raise Refuse('Source is not an ordinary file')
-    is_generated = bool(re.fullmatch(re.escape(PREFIX) + r'[0-9a-f]{24}\.gcode', current.name))
+    is_generated = bool(GENERATED_FILE.fullmatch(current.name))
     if generated and (current.parent != root or not is_generated):
         raise Refuse('Not a generated staging filename')
     if not generated and current.name.startswith(PREFIX):
@@ -128,7 +131,7 @@ def parse_start(line):
 
 def pending_path(registry, stage_name):
     """Only AutoXY-generated filenames may have a pending ownership record."""
-    match = re.fullmatch(re.escape(PREFIX) + r'([0-9a-f]{24})\.gcode', stage_name)
+    match = GENERATED_FILE.fullmatch(stage_name)
     if not match:
         raise Refuse('Invalid pending stage token')
     return registry_directory(registry) / (match.group(1) + '.pending.json')
@@ -158,9 +161,27 @@ def write_pending(registry, stage_name, sha256, byte_count):
     finally:
         temporary.unlink(missing_ok=True)
 
+def _allocate_stage_name(root, filename):
+    # Keep basename; remove characters unsafe for a one-word RatOS SD token.
+    label = re.sub(r'[^A-Za-z0-9_-]+', '_', Path(filename).stem)
+    label = label.strip('_-')[:60].rstrip('_-') or 'print'
+    root = Path(root).absolute()
+    for _ in range(100):
+        nanos = time.time_ns()
+        stamp = time.strftime('%Y%m%d-%H%M%S', time.localtime(nanos // 1000000000))
+        stamp += '-%06d' % ((nanos % 1000000000) // 1000)
+        dest = root / (PREFIX + label + '_' + stamp + '.gcode')
+        partial = dest.with_name('.' + dest.name + '.partial')
+        if (not dest.exists() and not dest.is_symlink()
+                and not partial.exists() and not partial.is_symlink()):
+            return dest
+        time.sleep(.001)
+    raise Refuse('Could not allocate a unique dated AutoXY filename')
+
+
 def stage(root, filename, registry=None):
     source = safe_path(root, filename)
-    dest = Path(root).absolute() / (PREFIX + secrets.token_hex(12) + '.gcode')
+    dest = _allocate_stage_name(root, filename)
     tmp = dest.with_name('.' + dest.name + '.partial')
     h = hashlib.sha256()
     total = 0
@@ -219,7 +240,8 @@ def stage(root, filename, registry=None):
                     or total != before.st_size):
                 raise Refuse('Source changed while staging')
         write_pending(registry, dest.name, h.hexdigest(), total)
-        os.replace(tmp, dest)
+        # Publish without overwriting a concurrent or existing stage.
+        os.link(tmp, dest)
         return {'status': 'STAGED_NOT_AUTHORIZED', 'stage_name': dest.name,
                 'already_ratos_processed': header_seen == 'supported',
                 'source_sha256': h.hexdigest(), 'bytes_read': total,
@@ -379,9 +401,10 @@ def registry_directory(registry):
 
 
 def registry_key(filename):
-    if not re.fullmatch(re.escape(PREFIX) + r'[0-9a-f]{24}\.gcode', filename):
+    match = GENERATED_FILE.fullmatch(filename)
+    if not match:
         raise Refuse('Invalid generated filename token')
-    return filename[len(PREFIX):-len('.gcode')]
+    return match.group(1)
 
 
 def register_source(root, stage_name, original, src_sha, final_sha, registry):

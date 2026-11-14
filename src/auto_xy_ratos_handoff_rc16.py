@@ -18,7 +18,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-STAGED = re.compile(r'^__AutoXY_RC16_[0-9a-f]{24}\.gcode$')
+STAGED = re.compile(r'^__AutoXY_RC16_(?:[0-9a-f]{24}|[A-Za-z0-9][A-Za-z0-9_-]{0,59}_[0-9]{8}-[0-9]{6}-[0-9]{6})\.gcode$')
 WORKER_RESULT_LIMIT = 4096
 RETENTION_LOCK_NAME = '.rc16_retention.lock'
 
