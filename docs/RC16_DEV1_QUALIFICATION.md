@@ -1,5 +1,7 @@
 # AutoXY v0.5.0 RC16 Dev1 — release/qualification record
 
+> **HISTORICAL ENGINEERING RECORD — not current installation or operational guidance.** Early Dev1 staging and qualification notes; statements that main is RC15, that RC16 is offline-only, or that no main merge occurred are obsolete. For current behaviour and remaining qualification use [RC16 Start Here](RC16_START_HERE.md) and [RC16 Release Status](RC16_RELEASE_STATUS.md).
+
 **Development only. Not a released, printer-qualified package.**
 
 This is the integrated RC16 development line, in [draft PR #8](https://github.com/peteoak/ratos-vaoc-auto-xy/pull/8). It is deliberately separate from the published RC15 Dev6 main branch. **No change to stock RatOS is required.**
