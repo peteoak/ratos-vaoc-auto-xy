@@ -2578,6 +2578,13 @@ class AutoXYGate:
             s['phase']='RETRY_REQUIRED' if eligible else 'MANUAL_REQUIRED'
             s['reason']=error
             s['retry_used']=False
+            # Permission to try a completely new protected print is NOT a
+            # current-print continuation. It is an in-memory, single-use
+            # no-write certificate attached only to this verified failed job.
+            # The coordinator can use it only AFTER native SD has unloaded
+            # this job and VAOC has been explicitly exited, and only when
+            # saved offsets still exactly match the pre-calibration baseline.
+            s['fresh_no_write_baseline']=tuple(s['initial_offsets'])
             gcmd.respond_info('AutoXY | recoverable no-write failure; original print will be HELD. '
                               + ('One guarded retry available. ' if eligible else 'Manual VAOC required. ')
                               + error)
