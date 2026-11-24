@@ -58,6 +58,37 @@ cancels and subsequent prints require **no manual restart**. Actual hardware
 cancellation and next-print behaviour must still be verified in a supervised
 test. Do not use the fresh/RC15 installer on an existing RC16.
 
+## 24 November 2026 — fresh calibration after safely cancelled no-write failure
+
+A failed calibration must never release its original protected two-tool file
+without verified alignment. RC16 now distinguishes a **certified no-write**
+failure from an uncertain calibration/offset-write failure.
+
+On the existing protected-print path, the gate certifies a no-write failure
+ONLY after checking no corrections, no saved write intents, unchanged baseline
+offsets and retained fault/interruption markers. If the operator cancels the
+held print, the virtual-SD file is fully unloaded, the status is terminal,
+and native VAOC has been **safely exited**, the handoff retires that session
+and stores a same-process, one-use certificate. The fault markers remain
+latched UNTIL the next independent two-tool start. On that request, it checks
+the exact saved baseline again, confirms the file remains unloaded and VAOC
+closed, and only then clears the transient fault/interruption flags for a
+**full fresh print-start calibration**. The old G-code is NEVER resumed and
+no saved offsets are changed by this rearm.
+
+An attempted correction or changed offsets, invalid/used retry, open VAOC,
+paused/selected file, changed operator ON/OFF preference, or lost in-memory
+certificate (such as after RESTART) **cannot** auto-rearm. Such cases retain
+the manual safety acknowledgement path. Single-tool, COPY and MIRROR paths
+remain unmodified. Hardware validation is still required.
+
+Use the dedicated existing-install updater
+`scripts/rc16_safe_no_write_refresh.py check` then `install` on an idle,
+unselected, fault-free existing **operator-enable RC16**. It is exact-hash
+pinned to the previous main gate and handoff; unknown installations refuse.
+The updater makes a rollback snapshot and needs one Klipper restart to load
+code. Normal recoverable failures afterwards do not need a restart.
+
 ## 24 November 2026 — persistent ON/OFF user ownership
 
 A new report showed `AUTO XY: OFF; FAULT=0; IN_PROGRESS=0` when

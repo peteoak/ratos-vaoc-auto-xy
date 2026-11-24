@@ -90,6 +90,31 @@ A camera calibration is **printer-specific**: the user's camera geometry, both n
 
 Never accept a false circular feature, infer a nozzle centre from an annotated screenshot, or tighten the user's fixed ROI merely to silence ambiguity. See [maintenance/recommissioning](RC16_RECOMMISSION_MAINTENANCE.md) for the exact Mainsail controls and reference retention rules.
 
+## RC16: fresh retry after a cancelled, proven no-write failure
+
+The protected original file remains held on calibration failure until the
+operator either uses guarded retry/manual VAOC or **cancels the print**.
+Cancellation never authorizes the original print to continue.
+
+If the failed run recorded **no attempted nozzle-offset write**, the baseline
+offsets remain unchanged, the old file is fully unloaded, and native VAOC
+has been exited, RC16 may allow the next independent two-tool print to run
+a completely fresh homing, heatsoak and camera measurement without requiring
+manual `AUTO_XY_ACKNOWLEDGE`. It clears the old transient fault only when
+starting this *new* protected job, after verifying the exact baseline again.
+
+If native VAOC is active, an offset was written/possibly written, saved
+offsets differ, the print is paused/selected, or Klipper was restarted and
+the no-write certificate lost, **normal manual recovery remains mandatory**.
+Do not forcibly exit VAOC or simply clear flags to make printing work.
+
+For an existing RC16 with the previous operator-enable release already
+installed, use the exact-source `rc16_safe_no_write_refresh.py check`
+and `install` commands from the matching reviewed source. Installation
+requires a fully idle, unloaded, fault-free printer and restarts Klipper
+once with automatic rollback on failure. No user ON/OFF selection or saved
+offset is rewritten by the update.
+
 ## RC16: ON/OFF belongs to the operator (24 November 2026)
 
 RC16 now preserves the user's persistent `AUTO_XY_ON` / `AUTO_XY_OFF`
