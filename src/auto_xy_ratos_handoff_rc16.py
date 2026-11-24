@@ -70,6 +70,11 @@ class AutoXYRC16Handoff:
         self._print_lock_timer = None
         self.gcode.register_command('AUTOXY_RC16_HANDOFF_STATUS', self.cmd_status)
         self.printer.register_event_handler('klippy:ready', self.on_ready)
+        # Klipper emits this AFTER closing its virtual-SD file and resetting
+        # print_stats. Unlike a generic CANCEL_PRINT wrapper, this sees native
+        # reset calls from all supported Mainsail/RatOS paths.
+        self.printer.register_event_handler('virtual_sdcard:reset_file',
+                                            self._on_sd_reset)
 
     def get_status(self, eventtime):
         # Read-only Klipper status for installer verification. 'armed' becomes
@@ -254,6 +259,53 @@ class AutoXYRC16Handoff:
                 self._retention_next = eventtime + 3600.
         return eventtime + 30.
 
+    def _retire_closed_print(self, eventtime):
+        """Retire a terminal/unloaded job; NEVER discard a paused recovery.
+
+        Both the virtual-SD file and print_stats must confirm completion or
+        reset. A reset event inside our OWN new native SD start is ignored
+        while busy, so we cannot release the new print's ownership lock.
+        """
+        if self.busy or not self.installed or getattr(self.gate, 'busy', False):
+            return False
+        try:
+            ps = self.printer.lookup_object('print_stats', None)
+            vsd = self.printer.lookup_object('virtual_sdcard', None)
+            vaoc = self.printer.lookup_object('gcode_macro _VAOC', None)
+            if ps is None or vsd is None or vaoc is None:
+                return False
+            stats = ps.get_status(eventtime)
+            sd = vsd.get_status(eventtime)
+            vaoc_state = vaoc.get_status(eventtime)
+            if (stats.get('state') not in
+                    ('standby', 'complete', 'cancelled', 'error')
+                    or sd.get('is_active') is not False
+                    or sd.get('file_path') not in (None, '')
+                    or vaoc_state.get('is_started') is not False):
+                return False
+        except Exception:
+            logging.exception('RC16 cannot confirm terminal/unloaded SD state')
+            return False
+        session = getattr(self.gate, '_protected_session', None)
+        if session is not None:
+            # Only an *unloaded*, terminal print may lose its permission
+            # state. Do not reset saved faults or nozzle offsets here.
+            self.gate._protected_session = None
+            self.gate._retry_context = None
+            logging.info('RC16 retired unloaded protected-print session (former phase %s)',
+                         session.get('phase') if isinstance(session, dict)
+                         else 'unknown')
+        self._release_print_lock()
+        return True
+
+    def _on_sd_reset(self, *args):
+        # Native Klipper's SDCARD_PRINT_FILE also emits reset_file while
+        # opening the *next* print. Never retire an in-progress handoff.
+        try:
+            self._retire_closed_print(self.printer.get_reactor().monotonic())
+        except Exception:
+            logging.exception('RC16 virtual-SD reset observation failed closed')
+
     def _release_print_lock(self):
         if self._print_lock_fd is not None:
             fd, self._print_lock_fd = self._print_lock_fd, None
@@ -272,28 +324,13 @@ class AutoXYRC16Handoff:
             return self.printer.get_reactor().NEVER
         if self.busy:
             return eventtime + 2.
-        try:
-            status = self.ratos.v_sd.get_status(eventtime)
-            if status.get('is_active') is False and status.get('file_path') in (None, ''):
-                self._release_print_lock()
-                return self.printer.get_reactor().NEVER
-        except Exception:
-            logging.exception('RC16 cannot verify virtual-SD closure; keeping print file locked')
+        if self._retire_closed_print(eventtime):
+            return self.printer.get_reactor().NEVER
         return eventtime + 2.
 
     def _acquire_print_lock(self, gcmd):
-        if self._print_lock_fd is not None:
-            # A previous print can finish immediately before the next start,
-            # even if its two-second reaper has not fired yet. Check the
-            # actual native virtual-SD state synchronously, without waiting.
-            try:
-                status = self.ratos.v_sd.get_status(
-                    self.printer.get_reactor().monotonic())
-                if (status.get('is_active') is False and
-                        status.get('file_path') in (None, '')):
-                    self._release_print_lock()
-            except Exception:
-                logging.exception('RC16 cannot prove previous file is closed')
+        # The caller has already attempted terminal-state retirement before
+        # setting busy. Never release a selected/held print's ownership here.
         if self._print_lock_fd is not None:
             raise gcmd.error('RC16: previous print file remains selected; reset/unload it first')
         path = self.registry / RETENTION_LOCK_NAME
@@ -460,6 +497,11 @@ class AutoXYRC16Handoff:
         # the new start rather than racing its file lifecycle. Retry normally.
         if self._retention_proc is not None and self._retention_proc.poll() is None:
             raise gcmd.error('RC16 automatic retention in progress; retry print start')
+        # This is the synchronous fallback when a front end cancelled an old
+        # job without delivering a reset_file event. It also clears a stale
+        # PREPARING phase before native Klipper calls do_resume on the next
+        # file. A still-selected or paused job remains untouched.
+        self._retire_closed_print(self.printer.get_reactor().monotonic())
         self.busy = True
         stage_name = None
         handed_to_sd = False
@@ -580,9 +622,8 @@ class AutoXYRC16Handoff:
                 try:
                     status = self.ratos.v_sd.get_status(
                         self.printer.get_reactor().monotonic())
-                    if status.get('is_active') is False and status.get('file_path') in (None, ''):
-                        self._release_print_lock()
-                    else:
+                    if not self._retire_closed_print(
+                            self.printer.get_reactor().monotonic()):
                         self._schedule_print_lock_reaper()
                 except Exception:
                     logging.exception('RC16 could not prove rejected SD was closed; keeping lock')
