@@ -68,6 +68,9 @@ class AutoXYRC16Handoff:
         # including M25/manual-VAOC pauses. The cleanup worker takes EX lock.
         self._print_lock_fd = None
         self._print_lock_timer = None
+        # Only a same-process, audited NO-WRITE cancelled job may offer a
+        # single fresh-print rearm. Never persist this across a Klipper restart.
+        self._fresh_no_write_candidate = None
         self.gcode.register_command('AUTOXY_RC16_HANDOFF_STATUS', self.cmd_status)
         self.printer.register_event_handler('klippy:ready', self.on_ready)
         # Klipper emits this AFTER closing its virtual-SD file and resetting
@@ -288,8 +291,30 @@ class AutoXYRC16Handoff:
             return False
         session = getattr(self.gate, '_protected_session', None)
         if session is not None:
-            # Only an *unloaded*, terminal print may lose its permission
-            # state. Do not reset saved faults or nozzle offsets here.
+            # Only a gate-certified, no-write protected failure may be
+            # considered for next-print rearm. Keep safety markers latched
+            # until the next independent two-tool print is actually requested.
+            self._fresh_no_write_candidate = None
+            if (isinstance(session, dict)
+                    and not session.get('invalid', False)
+                    and session.get('phase') in ('RETRY_REQUIRED', 'MANUAL_REQUIRED')
+                    and session.get('retry_used') is False
+                    and isinstance(session.get('fresh_no_write_baseline'), tuple)
+                    and len(session['fresh_no_write_baseline']) == 3
+                    and self.gate.flag('auto_xy_v2_fault')
+                    and self.gate.flag('auto_xy_v2_in_progress')):
+                try:
+                    baseline = session['fresh_no_write_baseline']
+                    if tuple(self.gate.offsets()) == baseline:
+                        self._fresh_no_write_candidate = baseline
+                        logging.info(
+                            'RC16 cancelled audited no-write run; fresh print '
+                            'may clear its fault after independent revalidation')
+                except Exception:
+                    logging.exception(
+                        'RC16 cannot verify candidate baseline; retaining hard fault')
+            # Retire only an unloaded terminal session; not a fault marker
+            # or an operator's saved ON/OFF choice.
             self.gate._protected_session = None
             self.gate._retry_context = None
             logging.info('RC16 retired unloaded protected-print session (former phase %s)',
@@ -297,6 +322,55 @@ class AutoXYRC16Handoff:
                          else 'unknown')
         self._release_print_lock()
         return True
+
+    def _rearm_audited_no_write(self):
+        """One-use fresh-print recovery; NEVER resume the abandoned file.
+
+        Called only after the protected-file worker has classified a new
+        independent two-tool job, before opening virtual SD. A power loss,
+        changed saved offsets, running VAOC, busy gate, changed flags or
+        missing in-memory certificate makes this a hard manual-recovery case.
+        """
+        baseline = self._fresh_no_write_candidate
+        if baseline is None:
+            return False
+        # Consume before ANY persistent write, including if it fails midway.
+        self._fresh_no_write_candidate = None
+        try:
+            if (not self.gate.enabled()
+                    or self.gate.busy
+                    or self.gate._protected_session is not None
+                    or not self.gate.flag('auto_xy_v2_fault')
+                    or not self.gate.flag('auto_xy_v2_in_progress')
+                    or tuple(self.gate.offsets()) != baseline):
+                return False
+            t = self.printer.get_reactor().monotonic()
+            stats = self.printer.lookup_object('print_stats').get_status(t)
+            sd = self.printer.lookup_object('virtual_sdcard').get_status(t)
+            vaoc = self.printer.lookup_object('gcode_macro _VAOC').get_status(t)
+            if (stats.get('state') not in ('standby', 'cancelled', 'complete')
+                    or sd.get('is_active') is not False
+                    or sd.get('file_path') not in (None, '')
+                    or vaoc.get('is_started') is not False):
+                return False
+            # Only these transient safety flags are reset. The next
+            # protected file still MUST perform fresh homing, heatsoak,
+            # camera measurement, and both verifications.
+            self.gcode.run_script_from_command(
+                'SAVE_VARIABLE VARIABLE=auto_xy_v2_fault VALUE=0')
+            self.gcode.run_script_from_command(
+                'SAVE_VARIABLE VARIABLE=auto_xy_v2_in_progress VALUE=0')
+            self.gcode.run_script_from_command(
+                'SAVE_VARIABLE VARIABLE=auto_xy_v2_retry_available VALUE=0')
+            if (self.gate.flag('auto_xy_v2_fault')
+                    or self.gate.flag('auto_xy_v2_in_progress')):
+                raise CoordinatorError('No-write recovery did not clear fault flags')
+            logging.info('RC16 reopened fresh protected calibration after '
+                         'audited no-write failure; no previous print resumed')
+            return True
+        except Exception:
+            logging.exception('RC16 fresh no-write rearm refused; hard interlock retained')
+            return False
 
     def _on_sd_reset(self, *args):
         # Native Klipper's SDCARD_PRINT_FILE also emits reset_file while
@@ -570,6 +644,8 @@ class AutoXYRC16Handoff:
                     raise CoordinatorError(
                         'AutoXY calibration is busy. Wait for the current '
                         'calibration or recovery to finish before starting another print.')
+                if self.gate.flag('auto_xy_v2_fault') or self.gate.flag('auto_xy_v2_in_progress'):
+                    self._rearm_audited_no_write()
                 if self.gate.flag('auto_xy_v2_fault') or self.gate.flag('auto_xy_v2_in_progress'):
                     raise CoordinatorError(
                         'AutoXY calibration fault/interrupted run is latched. '
