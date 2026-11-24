@@ -108,14 +108,20 @@ class Gate:
     def __init__(self):
         self._protected_session = None
         self._retry_context = None
+        self.flags = {}
+        self.operator_enabled = True
+        self.current_offsets = (0.1, -0.2, 0.02)
     def enabled(self):
-        return True
+        return self.operator_enabled
     def flag(self, key):
-        return False
+        return bool(self.flags.get(key, False))
+    def offsets(self):
+        return self.current_offsets
 
 
 class Gcode:
-    def __init__(self):
+    def __init__(self, gate=None):
+        self.gate = gate
         self.handlers = {'PROCESS_GCODE_FILE': lambda gcmd: None, 'SDCARD_PRINT_FILE_BASE': lambda gcmd: None, 'M23': lambda gcmd: None, 'M26': lambda gcmd: None, 'M24': lambda gcmd: None}
         self.commands = []
     def register_command(self, name, value):
@@ -124,6 +130,9 @@ class Gcode:
         self.handlers[name] = value
     def run_script_from_command(self, command):
         self.commands.append(command)
+        if self.gate and command.startswith('SAVE_VARIABLE VARIABLE='):
+            words = dict(part.split('=', 1) for part in command.split()[1:])
+            self.gate.flags[words['VARIABLE']] = bool(int(words['VALUE']))
 
 
 class Config:
@@ -146,7 +155,7 @@ class Printer:
     def __init__(self, root, mode='primary'):
         self.ratos = RatOS(root, mode)
         self.gate = Gate()
-        self.gcode = Gcode()
+        self.gcode = Gcode(self.gate)
         self.gcode.handlers['PROCESS_GCODE_FILE'] = self.native_process
         self.reactor = Reactor()
         self.handlers = {}
@@ -357,6 +366,109 @@ class RC16HandoffTests(unittest.TestCase):
         self.obj.cmd_process(Gcmd(name))
         new = self.printer.ratos.v_sd.started[-1]
         self.assertIn(b'BED_TEMP=65', (self.root / new).read_bytes())
+
+    def start_no_write_failed_file(self, *, phase='MANUAL_REQUIRED',
+                                   invalid=False, retry_used=False,
+                                   baseline=None):
+        self.obj.cmd_process(Gcmd())
+        previous = self.printer.ratos.v_sd.started[-1]
+        original = self.printer.gate.current_offsets
+        session = {
+            'filename': previous,
+            'phase': phase,
+            'invalid': invalid,
+            'retry_used': retry_used,
+            'initial_offsets': original,
+        }
+        if baseline is not None:
+            session['fresh_no_write_baseline'] = baseline
+        self.printer.gate._protected_session = session
+        self.printer.gate.flags.update(auto_xy_v2_fault=True,
+                                      auto_xy_v2_in_progress=True)
+        return session
+
+    def test_fresh_print_after_cancelled_certified_no_write_rearms_safely(self):
+        baseline = self.printer.gate.current_offsets
+        self.start_no_write_failed_file(baseline=baseline)
+        self.printer.ratos.v_sd.finish()
+        self.printer.print_state = 'cancelled'
+        self.obj._on_sd_reset()
+        self.assertEqual(self.obj._fresh_no_write_candidate, baseline)
+        self.assertTrue(self.printer.gate.flag('auto_xy_v2_fault'))
+        self.assertIsNone(self.printer.gate._protected_session)
+        self.obj.cmd_process(Gcmd())
+        self.assertFalse(self.printer.gate.flag('auto_xy_v2_fault'))
+        self.assertFalse(self.printer.gate.flag('auto_xy_v2_in_progress'))
+        self.assertTrue(self.printer.gate.enabled())
+        self.assertEqual(self.obj._fresh_no_write_candidate, None)
+        self.assertEqual(len(self.printer.ratos.v_sd.started), 2)
+        self.assertIn('SAVE_VARIABLE VARIABLE=auto_xy_v2_fault VALUE=0',
+                      self.printer.gcode.commands)
+
+    def test_uncertified_or_invalid_failure_remains_blocked(self):
+        cases = (
+            ('no certificate', {},),
+            ('invalidated', {'invalid': True, 'baseline': self.printer.gate.current_offsets}),
+            ('retry consumed', {'retry_used': True, 'baseline': self.printer.gate.current_offsets}),
+            ('active phase', {'phase': 'MANUAL_ACTIVE',
+                              'baseline': self.printer.gate.current_offsets}),
+        )
+        for label, kws in cases:
+            with self.subTest(label):
+                self.setUp()
+                self.start_no_write_failed_file(**kws)
+                self.printer.ratos.v_sd.finish()
+                self.printer.print_state = 'cancelled'
+                self.obj._on_sd_reset()
+                self.assertIsNone(self.obj._fresh_no_write_candidate)
+                with self.assertRaisesRegex(RuntimeError,
+                                            'fault/interrupted run is latched'):
+                    self.obj.cmd_process(Gcmd())
+                self.assertTrue(self.printer.gate.flag('auto_xy_v2_fault'))
+
+    def test_offset_change_after_certificate_refuses_rearm(self):
+        baseline = self.printer.gate.current_offsets
+        self.start_no_write_failed_file(baseline=baseline)
+        self.printer.ratos.v_sd.finish()
+        self.printer.print_state = 'cancelled'
+        self.obj._on_sd_reset()
+        self.printer.gate.current_offsets = (0.2, -0.2, 0.02)
+        with self.assertRaisesRegex(RuntimeError,
+                                    'fault/interrupted run is latched'):
+            self.obj.cmd_process(Gcmd())
+        self.assertTrue(self.printer.gate.flag('auto_xy_v2_fault'))
+        self.assertIsNone(self.obj._fresh_no_write_candidate)
+
+    def test_vaoc_open_cannot_rearm_no_write_candidate(self):
+        baseline = self.printer.gate.current_offsets
+        self.start_no_write_failed_file(baseline=baseline)
+        self.printer.ratos.v_sd.finish()
+        self.printer.print_state = 'cancelled'
+        self.printer.vaoc_started = True
+        self.obj._on_sd_reset()
+        self.assertIsNone(self.obj._fresh_no_write_candidate)
+        with self.assertRaisesRegex(RuntimeError,
+                                    'previous print file remains selected'):
+            self.obj.cmd_process(Gcmd())
+
+    def test_operator_off_never_automatically_reenabled(self):
+        baseline = self.printer.gate.current_offsets
+        self.start_no_write_failed_file(baseline=baseline)
+        self.printer.ratos.v_sd.finish()
+        self.printer.print_state = 'cancelled'
+        self.obj._on_sd_reset()
+        self.printer.gate.operator_enabled = False
+        with self.assertRaisesRegex(RuntimeError, 'fault/interrupted run is latched'):
+            self.obj.cmd_process(Gcmd())
+        self.assertFalse(self.printer.gate.enabled())
+
+    def test_no_certificate_after_restart_fails_closed(self):
+        self.printer.gate.flags.update(auto_xy_v2_fault=True,
+                                      auto_xy_v2_in_progress=True)
+        self.assertIsNone(self.obj._fresh_no_write_candidate)
+        with self.assertRaisesRegex(RuntimeError, 'fault/interrupted run is latched'):
+            self.obj.cmd_process(Gcmd())
+        self.assertTrue(self.printer.gate.flag('auto_xy_v2_fault'))
 
     def test_cancel_retains_no_protected_session_or_file_lock(self):
         self.obj.cmd_process(Gcmd())
