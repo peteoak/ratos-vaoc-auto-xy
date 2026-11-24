@@ -37,7 +37,7 @@ This is concrete evidence of successful guarded calibrations, a fail-closed came
 
 The latest pre-merge RC16 source CI completed **370 tests, 5 skipped**. CI runs without the target physical MCU, printer endstops, camera geometry, Beacon and RatOS workload; it does not replace live verification. The additional documentation/manifest checks are tracked separately from camera and motion qualification.
 
-## 24 November 2026 — cancelled-print lifecycle fix (supervised)
+## 24 November 2026 — cancelled-print lifecycle fix (historical updater superseded)
 
 An observed cancellation left a protected-print session in `PREPARING` and
 the next start was refused by the stale direct-resume guard, despite Mainsail
@@ -50,7 +50,7 @@ native VAOC is not running, and neither the coordinator nor gate is busy.
 Paused, selected, printing or recoverable sessions remain protected. No
 saved offsets or persistent variables are modified.
 
-A previously installed RC16 requires the **one-time**, idle-only
+**Superseded:** Do not run the cancellation-only updater from current main; the combined `rc16_operator_enable_refresh.py` is the current reviewed update covering cancellation cleanup and operator-owned ON/OFF behaviour. Historically a previously installed RC16 used the **one-time**, idle-only
 `scripts/rc16_cancel_cleanup_refresh.py check` then `install` upgrade;
 the installer checks exact source versions, restarts Klipper and verifies
 readiness with automatic rollback on failure. After installation, ordinary
