@@ -55,11 +55,16 @@ class RC16DocumentationIntegrityTests(unittest.TestCase):
         self.assertEqual(sha256(original_readme), archived['sha256']['README.md'])
         self.assertEqual(sha256((ROOT/'README.md').read_bytes()),
                          current['sha256']['README.md'])
-        # Only the main-branch landing page's checksum differs; all
-        # original source and other historical documentation pins remain.
+        # The main RC16 landing page and its user-owned retry-dismiss macro
+        # are updated on main; all other RC15 compatibility inputs retain
+        # their exact archived checksums.
+        expected_main_overrides = ('README.md', 'config/auto_xy_macros.cfg')
         for path, value in archived['sha256'].items():
-            if path != 'README.md':
+            if path not in expected_main_overrides:
                 self.assertEqual(current['sha256'][path], value, path)
+        self.assertEqual(
+            sha256((ROOT/'config/auto_xy_macros.cfg').read_bytes()),
+            current['sha256']['config/auto_xy_macros.cfg'])
         self.assertEqual(set(current['sha256']), set(archived['sha256']))
 
     def test_rc16_source_inventory_matches_repository_files(self):
