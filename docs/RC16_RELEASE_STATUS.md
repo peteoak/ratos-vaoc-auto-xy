@@ -37,6 +37,27 @@ This is concrete evidence of successful guarded calibrations, a fail-closed came
 
 The latest pre-merge RC16 source CI completed **370 tests, 5 skipped**. CI runs without the target physical MCU, printer endstops, camera geometry, Beacon and RatOS workload; it does not replace live verification. The additional documentation/manifest checks are tracked separately from camera and motion qualification.
 
+## 24 November 2026 — cancelled-print lifecycle fix (supervised)
+
+An observed cancellation left a protected-print session in `PREPARING` and
+the next start was refused by the stale direct-resume guard, despite Mainsail
+showing Standby. The RC16 coordinator now observes native
+`virtual_sdcard:reset_file` and also checks for a terminal/unloaded
+previous job before new print processing. It retires the old in-memory
+protected session, its retry context and generated-file ownership lock **only**
+when print_stats is terminal, virtual SD is inactive and has no file loaded,
+native VAOC is not running, and neither the coordinator nor gate is busy.
+Paused, selected, printing or recoverable sessions remain protected. No
+saved offsets or persistent variables are modified.
+
+A previously installed RC16 requires the **one-time**, idle-only
+`scripts/rc16_cancel_cleanup_refresh.py check` then `install` upgrade;
+the installer checks exact source versions, restarts Klipper and verifies
+readiness with automatic rollback on failure. After installation, ordinary
+cancels and subsequent prints require **no manual restart**. Actual hardware
+cancellation and next-print behaviour must still be verified in a supervised
+test. Do not use the fresh/RC15 installer on an existing RC16.
+
 ## Known limitations and work still required
 
 1. **Beta tester's original nozzle scenes:** obtain and replay the **unannotated** source images and a true commissioned geometry profile. Confirm the actual nozzle is selected and the false circle refused. An overlay or owner's successful scenes are not a substitute.

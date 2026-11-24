@@ -105,6 +105,9 @@ class RatOS:
 class Gate:
     busy = False
     protected_print_enabled = True
+    def __init__(self):
+        self._protected_session = None
+        self._retry_context = None
     def enabled(self):
         return True
     def flag(self, key):
@@ -147,14 +150,32 @@ class Printer:
         self.gcode.handlers['PROCESS_GCODE_FILE'] = self.native_process
         self.reactor = Reactor()
         self.handlers = {}
+        self.print_state = None
+        self.vaoc_started = False
     def native_process(self, gcmd):
         name = gcmd.get('FILENAME')
         if self.ratos.process_gcode_file(name, self.ratos.enable_gcode_transform):
             return self.ratos.v_sd.cmd_SDCARD_PRINT_FILE(gcmd)
 
     def lookup_object(self, name, default=None):
+        if name == 'virtual_sdcard':
+            return self.ratos.v_sd
+        if name == 'print_stats':
+            return self
+        if name == 'gcode_macro _VAOC':
+            return self
         return {'ratos': self.ratos, 'auto_xy_gate': self.gate,
                 'gcode': self.gcode}.get(name, default)
+    def get_status(self, now):
+        # Generic simulated state for the Klipper print_stats and VAOC
+        # objects (both resolve here). The real Klipper objects are distinct.
+        # Supply both keys; users inspect their respective required field.
+        sd = self.ratos.v_sd
+        state = self.print_state
+        if state is None:
+            state = ('printing' if sd.is_active else
+                     'paused' if sd.file_path else 'standby')
+        return {'state': state, 'is_started': self.vaoc_started}
     def get_reactor(self):
         return self.reactor
     def register_event_handler(self, name, cb):
@@ -313,6 +334,82 @@ class RC16HandoffTests(unittest.TestCase):
         self.obj.cmd_process(Gcmd(name))
         new = self.printer.ratos.v_sd.started[-1]
         self.assertIn(b'BED_TEMP=65', (self.root / new).read_bytes())
+
+    def test_cancel_retains_no_protected_session_or_file_lock(self):
+        self.obj.cmd_process(Gcmd())
+        self.assertIsNotNone(self.obj._print_lock_fd)
+        self.printer.gate._protected_session = {
+            'filename': self.printer.ratos.v_sd.started[-1],
+            'phase': 'PREPARING', 'invalid': False}
+        self.printer.gate._retry_context = object()
+        self.printer.ratos.v_sd.finish()
+        self.printer.print_state = 'cancelled'
+        self.obj._on_sd_reset()
+        self.assertIsNone(self.printer.gate._protected_session)
+        self.assertIsNone(self.printer.gate._retry_context)
+        self.assertIsNone(self.obj._print_lock_fd)
+        self.obj.cmd_process(Gcmd())
+        self.assertEqual(len(self.printer.ratos.v_sd.started), 2)
+
+    def test_cancel_without_reset_event_cleans_before_next_start(self):
+        self.obj.cmd_process(Gcmd())
+        self.printer.gate._protected_session = {
+            'phase': 'PREPARING', 'invalid': False}
+        self.printer.ratos.v_sd.finish()
+        self.printer.print_state = 'standby'
+        self.obj.cmd_process(Gcmd())
+        self.assertIsNone(self.printer.gate._protected_session)
+        self.assertEqual(len(self.printer.ratos.v_sd.started), 2)
+
+    def test_paused_manual_vaoc_or_selected_file_never_reaped(self):
+        self.obj.cmd_process(Gcmd())
+        session = {'phase': 'MANUAL_REQUIRED', 'invalid': False}
+        self.printer.gate._protected_session = session
+        self.printer.ratos.v_sd.is_active = False
+        self.printer.print_state = 'paused'
+        self.obj._on_sd_reset()
+        self.assertIs(self.printer.gate._protected_session, session)
+        self.assertIsNotNone(self.obj._print_lock_fd)
+        with self.assertRaisesRegex(RuntimeError,
+                                    'previous print file remains selected'):
+            self.obj.cmd_process(Gcmd())
+
+    def test_cancel_does_not_clear_when_native_vaoc_still_started(self):
+        self.obj.cmd_process(Gcmd())
+        session = {'phase': 'MANUAL_ACTIVE', 'invalid': False}
+        self.printer.gate._protected_session = session
+        self.printer.ratos.v_sd.finish()
+        self.printer.print_state = 'cancelled'
+        self.printer.vaoc_started = True
+        self.obj._on_sd_reset()
+        self.assertIs(self.printer.gate._protected_session, session)
+        self.assertIsNotNone(self.obj._print_lock_fd)
+
+    def test_reset_observer_does_not_retire_during_new_handoff(self):
+        self.obj.cmd_process(Gcmd())
+        session = {'phase': 'PREPARING', 'invalid': False}
+        self.printer.gate._protected_session = session
+        self.printer.ratos.v_sd.finish()
+        self.printer.print_state = 'complete'
+        self.obj.busy = True
+        try:
+            self.obj._on_sd_reset()
+        finally:
+            self.obj.busy = False
+        self.assertIs(self.printer.gate._protected_session, session)
+        self.assertIsNotNone(self.obj._print_lock_fd)
+        self.obj._on_sd_reset()
+        self.assertIsNone(self.printer.gate._protected_session)
+        self.assertIsNone(self.obj._print_lock_fd)
+
+    def test_active_print_does_not_clear_prior_recovery_state(self):
+        self.obj.cmd_process(Gcmd())
+        session = {'phase': 'RETRY_REQUIRED', 'invalid': False}
+        self.printer.gate._protected_session = session
+        self.printer.print_state = 'printing'
+        self.obj._on_sd_reset()
+        self.assertIs(self.printer.gate._protected_session, session)
+        self.assertIsNotNone(self.obj._print_lock_fd)
 
     def test_generated_file_lock_blocks_cleanup_during_print_and_pause(self):
         self.obj.cmd_process(Gcmd())

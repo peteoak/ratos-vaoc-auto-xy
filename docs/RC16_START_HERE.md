@@ -43,6 +43,29 @@ The installer handles saved-state migration, backups, Klipper restart, readiness
 
 For the complete first-trial details, see [first supervised trial](RC16_FIRST_COMPLETE_TRIAL.md). That document is a dated qualification record, not an invitation to install old vision patches.
 
+### Existing RC16: cancellation and stale PREPARING fix (24 November)
+
+If a cancelled print leaves `AUTOXY_PRINT_STATUS` at `PREPARING` and
+the next print reports `direct do_resume bypass refused`, update the
+existing RC16 coordinator with its **dedicated** transactional updater
+rather than disabling any guards:
+
+```bash
+# Run on the Pi, from the pinned compatible RC16 repository tree.
+python3 -B scripts/rc16_cancel_cleanup_refresh.py check
+# Run install only if the printer is idle, not paused/selected, VAOC closed,
+# and the exact existing RC16 coordinator source is recognised.
+python3 -B scripts/rc16_cancel_cleanup_refresh.py install
+```
+
+This updater must authenticate `sudo` and restart Klipper **once to load
+the updated extension**, then rechecks readiness. Normal completed/cancelled
+jobs subsequently retire their old session and print-file lock without
+restarts. It fails closed rather than discarding an active, paused or
+recoverable original print. It never rewrites nozzle offsets or camera
+references. If the installed file differs from the reviewed original, stop
+and collect its SHA256 instead of bypassing source checks.
+
 ### Existing RC16: vision evidence telemetry
 
 The latest revised worker records per-image photo-selection evidence and HTTP 5xx retry history in `report.json`. The existing-system refresh is strictly opt-in and **idle-only**:
