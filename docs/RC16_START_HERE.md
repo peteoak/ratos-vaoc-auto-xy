@@ -43,9 +43,9 @@ The installer handles saved-state migration, backups, Klipper restart, readiness
 
 For the complete first-trial details, see [first supervised trial](RC16_FIRST_COMPLETE_TRIAL.md). That document is a dated qualification record, not an invitation to install old vision patches.
 
-### Existing RC16: cancellation and stale PREPARING fix (24 November)
+### Historical RC16: cancellation and stale PREPARING fix (superseded by operator-enable updater)
 
-If a cancelled print leaves `AUTOXY_PRINT_STATUS` at `PREPARING` and
+**Do not run the one-file cancellation-only updater on current RC16 main:** its exact-source pins are superseded. Use `rc16_operator_enable_refresh.py` above for the reviewed combined fix. The following commands are retained only to document the historical update.\n\nIf a cancelled print leaves `AUTOXY_PRINT_STATUS` at `PREPARING` and
 the next print reports `direct do_resume bypass refused`, update the
 existing RC16 coordinator with its **dedicated** transactional updater
 rather than disabling any guards:
@@ -89,6 +89,35 @@ A camera calibration is **printer-specific**: the user's camera geometry, both n
 5. Select `AUTO_XY_RECOMMISSION_FINISH` to leave native VAOC; then perform a supervised measure/print verification before trusting new automatic corrections.
 
 Never accept a false circular feature, infer a nozzle centre from an annotated screenshot, or tighten the user's fixed ROI merely to silence ambiguity. See [maintenance/recommissioning](RC16_RECOMMISSION_MAINTENANCE.md) for the exact Mainsail controls and reference retention rules.
+
+## RC16: ON/OFF belongs to the operator (24 November 2026)
+
+RC16 now preserves the user's persistent `AUTO_XY_ON` / `AUTO_XY_OFF`
+choice across camera calibration failure, recovery, cancellation and dismissed
+retry prompts. It **never** silently switches OFF because calibration failed.
+**This does not bypass safety:** `auto_xy_v2_fault` and
+`auto_xy_v2_in_progress` remain latched and independently block all protected
+two-tool starts until verified recovery/acknowledgement.
+
+A protected print-start refusal now names one of three distinct causes:
+- **AutoXY OFF (operator-selected):** When idle and without an outstanding
+  fault, use `AUTO_XY_ON`, then `AUTO_XY_STATUS`, then restart the **original** G-code.
+- **Fault / interrupted calibration:** Recover/exit native VAOC as appropriate,
+  inspect original/runtime saved offsets, resolve held recovery and only
+  then use `AUTO_XY_ACKNOWLEDGE`; do not clear a fault just to make a print start.
+- **Calibrator busy:** Wait for the active run or held recovery; do not start
+  another print or bypass the guarded resume.
+
+On an existing RC16 machine the one-time transactional updater is
+`scripts/rc16_operator_enable_refresh.py check` and, only if preflight
+passes, `install`. It pins the controller, coordinator and current macros,
+creates exact rollback backups, requires idle/unloaded and fault-free state,
+and restarts Klipper once to load changed software. It **does not** change
+the saved ON/OFF selection, offsets, camera profile or G-code files.
+
+This replaces prior text that instructed a failure to turn AutoXY OFF.
+A fault still forbids unsafe motion or new protected prints, even while
+`AUTO_XY_STATUS` says `ON; FAULT=1`.
 
 ## Normal print behaviour
 

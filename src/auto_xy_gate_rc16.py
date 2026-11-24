@@ -1659,10 +1659,10 @@ class AutoXYGate:
                 emit('// action:prompt_text Wait until the old print is no longer active. Do NOT exit VAOC or acknowledge the fault before retry.')
                 emit('// action:prompt_text Retry checks homing, live pose, tool, temperatures and saved offsets before ANY movement.')
                 emit('// action:prompt_button Retry calibration once (keep VAOC)|AUTO_XY_RETRY_ONCE|warning')
-                emit('// action:prompt_footer_button Leave Auto XY OFF|AUTO_XY_RETRY_DISMISS|secondary')
+                emit('// action:prompt_footer_button Dismiss retry (keep ON/OFF setting)|AUTO_XY_RETRY_DISMISS|secondary')
             else:
                 emit('// action:prompt_text Unsafe/nonrecoverable failure, or retry exhausted. Manually recover VAOC and saved/runtime offsets.')
-                emit('// action:prompt_footer_button Dismiss|AUTO_XY_OFF|secondary')
+                emit('// action:prompt_footer_button Dismiss (keep ON/OFF setting)|AUTO_XY_RETRY_DISMISS|secondary')
             emit('// action:prompt_show')
         except Exception:
             logging.exception('Auto XY could not display optional Mainsail failure prompt')
@@ -1672,7 +1672,7 @@ class AutoXYGate:
 
         The original PRINT is always aborted; this is an IDLE recalibration.
         All hard faults remain latched until the new run completes. The token
-        is consumed BEFORE re-enabling / moving; Klipper restart loses the
+        is consumed BEFORE any movement; Klipper restart loses the
         RAM-only pose context and requires manual recovery.
         """
         if self.busy:
@@ -1684,8 +1684,8 @@ class AutoXYGate:
             raise gcmd.error('Retry refused: active VAOC pose context was lost (e.g. Klipper restarted); manually recover and acknowledge fault')
         if not self.flag('auto_xy_v2_fault') or not self.flag('auto_xy_v2_in_progress'):
             raise gcmd.error('Retry refused: original safety markers changed; manually inspect the printer')
-        if self.enabled():
-            raise gcmd.error('Retry blocked: AUTO XY must remain OFF until the guarded retry starts')
+        if not self.enabled():
+            raise gcmd.error('Retry blocked: AutoXY was explicitly switched OFF. User must restore ON after safe fault recovery; no automatic enable is permitted')
         if self.printer.get_state_message()[1]!='ready':
             raise gcmd.error('Retry blocked: Klipper is not ready')
         if str(self.sts('print_stats').get('state','')).lower() in ('printing','paused'):
@@ -1716,8 +1716,8 @@ class AutoXYGate:
         try:
             self.run_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_retry_used VALUE=1')
             self.run_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_retry_available VALUE=0')
-            # Keep fault + interrupted marker set during the entire retry.
-            self.run_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_enabled VALUE=1')
+            # Fault and interrupted markers stay latched during retry;
+            # the user's ON/OFF selection must never be rewritten here.
         except Exception as exc:
             raise gcmd.error('Retry could not commit one-use token: '+str(exc))
         gcmd.respond_info('AutoXY | RETRY: Standalone active-VAOC retry accepted; no print is held.' if self.report.get('mode')=='IDLE' else 'AutoXY | RETRY: Legacy unprotected print is cancelled; a NEW print is required.')
@@ -2405,11 +2405,14 @@ class AutoXYGate:
             else:
                 self.report['rollback']='DEFERRED: trusted current saved offsets retained for one ACTIVE-VAOC retry'
             try:
-                self.run_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_enabled VALUE=0')
+                # Failure is controlled by FAULT/IN_PROGRESS interlocks, not
+                # by rewriting the user's persistent ON/OFF preference.
                 self.run_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_fault VALUE=1')
-                self.report['auto_xy_switched_off']=True
+                self.report['auto_xy_switched_off']=False
+                self.report['auto_xy_user_selection_preserved']=True
             except Exception:
                 self.report['auto_xy_switched_off']=False
+                self.report['auto_xy_user_selection_preserved']=True
                 retry_possible=False
             try:
                 if retry_possible:
@@ -2725,8 +2728,8 @@ class AutoXYGate:
             raise gcmd.error('AutoXY retry token invalid: use native manual VAOC')
         if not self.flag('auto_xy_v2_fault') or not self.flag('auto_xy_v2_in_progress'):
             raise gcmd.error('AutoXY retry expected latched failed AutoXY state')
-        if self.enabled():
-            raise gcmd.error('AutoXY retry expected AutoXY disabled after failure')
+        if not self.enabled():
+            raise gcmd.error('AutoXY retry blocked: operator switched AutoXY OFF; cannot automatically change the ON/OFF preference')
         if tuple(self.offsets())!=s['initial_offsets']:
             s['invalid']=True
             raise gcmd.error('AutoXY retry refused: saved offsets changed')
@@ -2740,7 +2743,8 @@ class AutoXYGate:
         try:
             self.run_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_retry_used VALUE=1')
             self.run_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_retry_available VALUE=0')
-            self.run_gcode('SAVE_VARIABLE VARIABLE=auto_xy_v2_enabled VALUE=1')
+            # Leave operator-selected AUTO_XY_ON in place: safety is enforced
+            # independently by the latched fault and one-use retry token.
         except Exception:
             s['invalid']=True
             raise gcmd.error('AutoXY retry could not safely commit its one-use token; cancel held file')

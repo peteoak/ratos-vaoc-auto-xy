@@ -37,7 +37,7 @@ This is concrete evidence of successful guarded calibrations, a fail-closed came
 
 The latest pre-merge RC16 source CI completed **370 tests, 5 skipped**. CI runs without the target physical MCU, printer endstops, camera geometry, Beacon and RatOS workload; it does not replace live verification. The additional documentation/manifest checks are tracked separately from camera and motion qualification.
 
-## 24 November 2026 — cancelled-print lifecycle fix (supervised)
+## 24 November 2026 — cancelled-print lifecycle fix (historical updater superseded)
 
 An observed cancellation left a protected-print session in `PREPARING` and
 the next start was refused by the stale direct-resume guard, despite Mainsail
@@ -50,13 +50,35 @@ native VAOC is not running, and neither the coordinator nor gate is busy.
 Paused, selected, printing or recoverable sessions remain protected. No
 saved offsets or persistent variables are modified.
 
-A previously installed RC16 requires the **one-time**, idle-only
+**Superseded:** Do not run the cancellation-only updater from current main; the combined `rc16_operator_enable_refresh.py` is the current reviewed update covering cancellation cleanup and operator-owned ON/OFF behaviour. Historically a previously installed RC16 used the **one-time**, idle-only
 `scripts/rc16_cancel_cleanup_refresh.py check` then `install` upgrade;
 the installer checks exact source versions, restarts Klipper and verifies
 readiness with automatic rollback on failure. After installation, ordinary
 cancels and subsequent prints require **no manual restart**. Actual hardware
 cancellation and next-print behaviour must still be verified in a supervised
 test. Do not use the fresh/RC15 installer on an existing RC16.
+
+## 24 November 2026 — persistent ON/OFF user ownership
+
+A new report showed `AUTO XY: OFF; FAULT=0; IN_PROGRESS=0` when
+a reprint was attempted; the two-tool start was safely refused but only
+displayed the generic `cannot authorise independent dual-tool print`.
+The previous gate's failure handler and retry-dismiss macro both wrote
+`auto_xy_v2_enabled=0`, unexpectedly changing the operator's choice.
+
+The RC16 controller and macro now preserve the saved user ON/OFF setting
+on every calibration failure, retry, retry-dismiss and cancellation.
+The **persistent FAULT/IN_PROGRESS interlocks remain mandatory**, and a
+protected two-tool file is never permitted to print while a fault remains
+latched. A distinct print-start error now explains `OFF`, `FAULT` or
+`BUSY` and the safe corresponding next step.
+
+A dedicated, exact-hash existing-RC16 updater
+`scripts/rc16_operator_enable_refresh.py` changes the controller, handoff
+and retry-dismiss macro atomically with verified snapshots/rollback. An
+actual printer run is still needed to verify post-cancellation/next-print
+behaviour and retry UI interactions. **Do not confuse an ON preference with
+successful calibration authorization.**
 
 ## Known limitations and work still required
 

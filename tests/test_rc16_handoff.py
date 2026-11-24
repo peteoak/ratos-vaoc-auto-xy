@@ -199,6 +199,29 @@ class RC16HandoffTests(unittest.TestCase):
         self.printer.handlers['klippy:ready']()
         self.assertTrue(self.obj.installed)
 
+    def test_protected_print_explains_operator_selected_off(self):
+        self.printer.gate.enabled = lambda: False
+        with self.assertRaisesRegex(RuntimeError,
+                                    'AutoXY is OFF by operator selection'):
+            self.obj.cmd_process(Gcmd())
+        self.assertEqual(self.printer.ratos.v_sd.started, [])
+        self.assertIsNone(self.obj._print_lock_fd)
+
+    def test_protected_print_explains_latched_fault_without_toggling_off(self):
+        self.printer.gate.flag = lambda name: name == 'auto_xy_v2_fault'
+        with self.assertRaisesRegex(RuntimeError,
+                                    'calibration fault/interrupted run is latched'):
+            self.obj.cmd_process(Gcmd())
+        self.assertEqual(self.printer.ratos.v_sd.started, [])
+        self.assertTrue(self.printer.gate.enabled())
+
+    def test_protected_print_explains_busy_calibrator(self):
+        self.printer.gate.busy = True
+        with self.assertRaisesRegex(RuntimeError,
+                                    'AutoXY calibration is busy'):
+            self.obj.cmd_process(Gcmd())
+        self.assertEqual(self.printer.ratos.v_sd.started, [])
+
     def test_independent_two_tool_is_protected_after_ratos(self):
         before = self.source.read_bytes()
         self.obj.cmd_process(Gcmd())

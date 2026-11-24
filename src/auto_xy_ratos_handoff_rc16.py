@@ -564,10 +564,26 @@ class AutoXYRC16Handoff:
             if type(protected) is not bool:
                 raise CoordinatorError('Worker did not establish protection state')
             if protected:
-                if (self.gate.busy or not self.gate.enabled()
-                        or self.gate.flag('auto_xy_v2_fault')
-                        or self.gate.flag('auto_xy_v2_in_progress')):
-                    raise CoordinatorError('AutoXY cannot authorise independent dual-tool print')
+                # The operator's preference is independent from safety state.
+                # Never toggle it here, and report the specific interlock.
+                if self.gate.busy:
+                    raise CoordinatorError(
+                        'AutoXY calibration is busy. Wait for the current '
+                        'calibration or recovery to finish before starting another print.')
+                if self.gate.flag('auto_xy_v2_fault') or self.gate.flag('auto_xy_v2_in_progress'):
+                    raise CoordinatorError(
+                        'AutoXY calibration fault/interrupted run is latched. '
+                        'Independent T0/T1 print BLOCKED; the ON/OFF setting '
+                        'has not changed. Recover or cancel the previous job, '
+                        'verify saved/runtime nozzle offsets and VAOC state, '
+                        'then use AUTO_XY_ACKNOWLEDGE when safe. Do not bypass calibration.')
+                if not self.gate.enabled():
+                    raise CoordinatorError(
+                        'AutoXY is OFF by operator selection. Independent T0/T1 '
+                        'print BLOCKED because automatic XY calibration is not '
+                        'enabled. With printer idle and no unresolved fault, '
+                        'run AUTO_XY_ON and confirm AUTO_XY_STATUS; '
+                        'then start the ORIGINAL G-code file again.')
             elif mode == 'independent':
                 gcmd.respond_info('AutoXY RC16: independent single-tool print; native RatOS path')
             final_hash = prepared.get('output_sha256')
