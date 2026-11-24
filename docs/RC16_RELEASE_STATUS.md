@@ -58,6 +58,28 @@ cancels and subsequent prints require **no manual restart**. Actual hardware
 cancellation and next-print behaviour must still be verified in a supervised
 test. Do not use the fresh/RC15 installer on an existing RC16.
 
+## 24 November 2026 — persistent ON/OFF user ownership
+
+A new report showed `AUTO XY: OFF; FAULT=0; IN_PROGRESS=0` when
+a reprint was attempted; the two-tool start was safely refused but only
+displayed the generic `cannot authorise independent dual-tool print`.
+The previous gate's failure handler and retry-dismiss macro both wrote
+`auto_xy_v2_enabled=0`, unexpectedly changing the operator's choice.
+
+The RC16 controller and macro now preserve the saved user ON/OFF setting
+on every calibration failure, retry, retry-dismiss and cancellation.
+The **persistent FAULT/IN_PROGRESS interlocks remain mandatory**, and a
+protected two-tool file is never permitted to print while a fault remains
+latched. A distinct print-start error now explains `OFF`, `FAULT` or
+`BUSY` and the safe corresponding next step.
+
+A dedicated, exact-hash existing-RC16 updater
+`scripts/rc16_operator_enable_refresh.py` changes the controller, handoff
+and retry-dismiss macro atomically with verified snapshots/rollback. An
+actual printer run is still needed to verify post-cancellation/next-print
+behaviour and retry UI interactions. **Do not confuse an ON preference with
+successful calibration authorization.**
+
 ## Known limitations and work still required
 
 1. **Beta tester's original nozzle scenes:** obtain and replay the **unannotated** source images and a true commissioned geometry profile. Confirm the actual nozzle is selected and the false circle refused. An overlay or owner's successful scenes are not a substitute.
