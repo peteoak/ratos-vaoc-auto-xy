@@ -124,7 +124,7 @@ class OperatorOwnedEnableTests(unittest.TestCase):
             return real(path, data, mode)
         with patch.object(updater, 'FILES', records):
             with patch.object(updater, 'atomic_replace', side_effect=fail_on_third):
-                with self.assertRaisesRegex(updater.Refuse, 'original.*restored'):
+                with self.assertRaisesRegex(updater.Refuse, 'previous bytes restored'):
                     updater.install(ROOT, home, live=False)
         for relative, original in before.items():
             self.assertEqual((home/relative).read_bytes(), original)
