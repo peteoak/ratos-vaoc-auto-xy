@@ -43,9 +43,9 @@ The installer handles saved-state migration, backups, Klipper restart, readiness
 
 For the complete first-trial details, see [first supervised trial](RC16_FIRST_COMPLETE_TRIAL.md). That document is a dated qualification record, not an invitation to install old vision patches.
 
-### Existing RC16: cancellation and stale PREPARING fix (24 November)
+### Historical RC16: cancellation and stale PREPARING fix (superseded by operator-enable updater)
 
-If a cancelled print leaves `AUTOXY_PRINT_STATUS` at `PREPARING` and
+**Do not run the one-file cancellation-only updater on current RC16 main:** its exact-source pins are superseded. Use `rc16_operator_enable_refresh.py` above for the reviewed combined fix. The following commands are retained only to document the historical update.\n\nIf a cancelled print leaves `AUTOXY_PRINT_STATUS` at `PREPARING` and
 the next print reports `direct do_resume bypass refused`, update the
 existing RC16 coordinator with its **dedicated** transactional updater
 rather than disabling any guards:
