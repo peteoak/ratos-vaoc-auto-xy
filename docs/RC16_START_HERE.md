@@ -90,6 +90,36 @@ A camera calibration is **printer-specific**: the user's camera geometry, both n
 
 Never accept a false circular feature, infer a nozzle centre from an annotated screenshot, or tighten the user's fixed ROI merely to silence ambiguity. See [maintenance/recommissioning](RC16_RECOMMISSION_MAINTENANCE.md) for the exact Mainsail controls and reference retention rules.
 
+## 26 November: T0 camera-rim rejection correction
+
+On 25 November a protected independent print halted during
+`preflight_t0` because the global *coarse* annular detector selected a
+reflection/residue feature and disagreed with a valid Hough nozzle circle.
+The original print remained held and the operator successfully completed
+native VAOC, accepted manual alignment and continued the same print.
+Do not treat the successful manual continuation as proof that automatic
+camera alignment had succeeded.
+
+The `two_stage_roi` geometric detector now has a narrowly guarded local
+annular corroboration path. It does NOT simply loosen circle tolerance,
+skip commissioning checks, or rely on the saved photographic appearance
+to rescue a rejected circle. It requires a unique commissioned Hough
+candidate and near-global-strength annular agreement within the original
+18px limit. Ambiguity still blocks the original protected print.
+
+For **existing** RC16 with the reviewed safe-no-write gate and handoff,
+use the detector-only, hash-pinned update from current compatible source:
+
+```bash
+python3 -B scripts/rc16_local_annular_refresh.py check
+python3 -B scripts/rc16_local_annular_refresh.py install
+```
+
+Only run installation with the printer truly idle, no selected/paused
+file, VAOC closed and no outstanding AutoXY fault or retry. Installation
+takes a verified rollback snapshot and restarts Klipper once. It does
+not edit saved offsets or camera commissioning images.
+
 ## RC16: fresh retry after a cancelled, proven no-write failure
 
 The protected original file remains held on calibration failure until the

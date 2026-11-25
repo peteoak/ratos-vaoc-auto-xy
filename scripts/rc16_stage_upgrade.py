@@ -41,7 +41,7 @@ SOURCES = {
     'auto_xy/vision/auto_xy_reference_signature_rc16.py':
         ('src/auto_xy_reference_signature_rc16.py', '1350573fc9052a3ccd8639d2a109a1555964de97'),
     'auto_xy/vision/auto_xy_detector_rc16.py':
-        ('src/auto_xy_detector_rc16.py', 'e44207a3da584961031280f6332a597326dc5e63'),
+        ('src/auto_xy_detector_rc16.py', '2ab349d22b241e2962fc8a2972b2317fac76cfe1'),
     'auto_xy/vision/auto_xy_vision_worker.py':
         ('src/auto_xy_vision_worker_rc16.py', 'a85e68d019a9317cde6ed6aaaba89f012ee8d99d'),
     'auto_xy/workers/rc16_recommission_worker.py':

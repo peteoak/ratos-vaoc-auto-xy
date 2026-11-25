@@ -23,6 +23,11 @@ COARSE_DOWNSAMPLE = .25
 COARSE_SEARCH_RADIUS_PX = 380.0
 COARSE_MIN_SCORE = .19
 COARSE_MAX_HOUGH_ERROR_PX = 18.0
+# If the global coarse winner is a reflection/ooze artifact, a LOCAL
+# independent annular peak may corroborate the *same* unique Hough circle.
+# Keep within 4% of the global-best correlation: never accept a weak
+# secondary match, and never remove the commissioned centre/radius guards.
+COARSE_LOCAL_MIN_RELATIVE_SCORE = .96
 # Hough dp=1.25: ROI origins on 5-pixel intervals preserve global accumulator
 # quantisation. Any unaligned crop can alter the centre by several pixels.
 PRECISION_ROI_HALF = 260
@@ -31,13 +36,15 @@ PRECISION_ROI_EDGE_MARGIN = 28
 
 
 
-def _coarse_nozzle_location(gray, expected_center, expected_radius):
+def _coarse_nozzle_location(gray, expected_center, expected_radius,
+                            search_radius_px=COARSE_SEARCH_RADIUS_PX):
     """Fast independent annular edge-template matcher, at quarter resolution.
 
     Returns a ROUGH centre for rejecting unrelated Hough candidates, never
     directly as a calibration coordinate. No image history or motion shortcuts.
-    Search window allows the normal +/-0.2mm calibration sweeps and large
-    diagnostic deviations, while requiring a real commissioned profile.
+    By default the search window allows calibration sweeps and diagnostic
+    deviations. A tightly localised search is used ONLY to independently
+    corroborate an already commissioned and unambiguous Hough circle.
     """
     if expected_center is None or expected_radius is None:
         raise ValueError('Two-stage detector requires commissioned nozzle centre/radius')
@@ -56,7 +63,10 @@ def _coarse_nozzle_location(gray, expected_center, expected_radius):
     # Coordinates in correlation image refer to template TOP-LEFT.
     cx = float(expected_center[0])*scale-half
     cy = float(expected_center[1])*scale-half
-    maxdist = COARSE_SEARCH_RADIUS_PX*scale
+    if (not np.isfinite(search_radius_px) or
+            not 0 < search_radius_px <= COARSE_SEARCH_RADIUS_PX):
+        raise ValueError('Invalid independent annular search radius')
+    maxdist = search_radius_px*scale
     left = max(0,int(np.floor(cx-maxdist)))
     right = min(corr.shape[1],int(np.ceil(cx+maxdist))+1)
     top = max(0,int(np.floor(cy-maxdist)))
@@ -69,9 +79,33 @@ def _coarse_nozzle_location(gray, expected_center, expected_radius):
                          (best[1]+top+half)/scale],dtype=float)
     if not np.isfinite(score) or score < COARSE_MIN_SCORE:
         raise ValueError('Two-stage coarse nozzle location uncertain (score %.3f)' % score)
-    if float(np.linalg.norm(coarse-expected_center)) > COARSE_SEARCH_RADIUS_PX:
+    if float(np.linalg.norm(coarse-expected_center)) > search_radius_px:
         raise ValueError('Two-stage coarse location exceeds commissioned search region')
     return coarse, float(score)
+
+
+def _local_annular_corrob(gray, roi_origin, hough_circle,
+                           expected_radius, global_score):
+    """Second independent annular peak must support this SAME Hough circle.
+
+    Preserve Hough's precision coordinates, enforce the original maximum
+    18px independent error, and require a peak nearly as strong as the
+    global annular winner. Only invoked for normal-light two_stage_roi
+    after the original global-coarse cross-check rejects all candidates.
+    """
+    position = np.asarray(hough_circle[:2], dtype=float)
+    local_center = position - np.asarray(roi_origin, dtype=float)
+    try:
+        other_local, score = _coarse_nozzle_location(
+            gray, local_center, expected_radius,
+            search_radius_px=COARSE_MAX_HOUGH_ERROR_PX)
+    except ValueError:
+        return False
+    if score < max(COARSE_MIN_SCORE,
+                   float(global_score) * COARSE_LOCAL_MIN_RELATIVE_SCORE):
+        return False
+    return (float(np.linalg.norm(other_local-local_center))
+            <= COARSE_MAX_HOUGH_ERROR_PX)
 
 
 def _aligned_precision_crop(gray, coarse_local, radius):
@@ -186,6 +220,33 @@ def detect(path, roi=DEFAULT_ROI, radius=(MIN_RADIUS, MAX_RADIUS), annotate=None
                       expected_center=expected_center,
                       expected_radius=expected_radius, coarse_center=coarse_center,
                       ambiguous_selector=ambiguous_selector)
+        if best is None and detector_mode == 'two_stage_roi':
+            # The global coarse winner can be pulled away by nozzle ooze or
+            # bright hardware despite the genuine Hough circle being clearly
+            # present. Do NOT relax Hough thresholds, commissioned centre/
+            # radius bounds, or ambiguity handling. Re-run Hough without
+            # global-coarse filtering, then require a near-global-strength
+            # INDEPENDENT local annular peak supporting that exact circle.
+            # No appearance scoring can rescue a geometry ambiguity here.
+            candidate = _hough(
+                precision_gray, precision_x, precision_y, radius,
+                expected_center=expected_center,
+                expected_radius=expected_radius, coarse_center=None,
+                ambiguous_selector=None)
+            if candidate is None and precision_gray is not gray:
+                # The mislocated coarse crop may have missed the true rim.
+                # This slower full-ROI check occurs only after a rejection.
+                candidate = _hough(
+                    gray, x, y, radius,
+                    expected_center=expected_center,
+                    expected_radius=expected_radius, coarse_center=None,
+                    ambiguous_selector=None)
+            if (candidate is not None and
+                    _local_annular_corrob(
+                        gray, (x,y), candidate,
+                        expected_radius, coarse_score)):
+                best = candidate
+                mode = 'two-stage-roi-local-annular'
         if best is None:
             raise ValueError(f'No plausible nozzle rim in normally lit image {path}; '
                              f'ROI mean={roi_mean:.1f}; clean/focus/check lighting')
