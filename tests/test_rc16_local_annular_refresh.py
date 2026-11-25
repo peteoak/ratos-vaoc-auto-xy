@@ -48,8 +48,11 @@ class LocalAnnularUpgradeTests(unittest.TestCase):
 
     def test_failed_install_restores_previous_bytes(self):
         old = self.installed.read_bytes()
+        restart_calls = [0]
         def fail_restart():
-            raise RuntimeError('injected readiness failure')
+            restart_calls[0] += 1
+            if restart_calls[0] == 1:
+                raise RuntimeError('injected readiness failure')
         with self.override_pins()[0], self.override_pins()[1], self.override_pins()[2], \
              patch.object(mod, 'status', return_value=self.safe_state()):
             with self.assertRaisesRegex(mod.Refuse, 'original detector restored'):
