@@ -37,6 +37,37 @@ This is concrete evidence of successful guarded calibrations, a fail-closed came
 
 The latest pre-merge RC16 source CI completed **370 tests, 5 skipped**. CI runs without the target physical MCU, printer endstops, camera geometry, Beacon and RatOS workload; it does not replace live verification. The additional documentation/manifest checks are tracked separately from camera and motion qualification.
 
+## 26 November 2026 — T0 preflight false-rejection from annular global peak
+
+The 25 November T0 diagnostic bundle contains two 1920x1080 normally
+illuminated snapshots from `20261125-090219_print`. The detector's
+commissioned T0 radius is 151.25px, centre (960.625,546.875)px. Reproduction
+with the production Hough and annular parameters detects unique precision
+circles at approximately (984.4,511.9,r=147.1) and
+(979.4,509.4,r=152.6)px. The global coarse annular matcher instead chose
+(988,564) and (1052,540)px, 52.2px and 78.8px away, above the existing
+18px cross-check limit. Both Hough candidates satisfy the original
+commissioned centre/radius constraints; local annular correlations near
+those candidates independently locate peaks within about 8.4px / 4.3px,
+with correlation >=96% of the global winner.
+
+The experimental `two_stage_roi` detector now retains its original
+global cross-check as the normal path. Only on a normal-lit rejection will
+it retry unique Hough circle detection without the global coarse gate,
+then independently demand a local annular match within the **original
+18px** tolerance, original minimum correlation, and >=96% of global
+coarse strength. The precision centre is still entirely Hough-derived.
+Low-light paths, commissioned centre/radius limits, two-circle ambiguity,
+worker identity checks and offset-write safety are unchanged. This is
+not proof of micrometre-scale physical accuracy; confirm on the printer.
+
+An existing reviewed RC16 installation can apply this **detector-only**
+change using `scripts/rc16_local_annular_refresh.py check` then
+`install`, which requires no active/held print, VAOC or fault. Source
+and existing RC16 controller pins, rollback snapshot, readiness and
+automatic rollback are mandatory. Do not run the historical vision updater
+against current main; its original source hashes remain frozen.
+
 ## 24 November 2026 — cancelled-print lifecycle fix (historical updater superseded)
 
 An observed cancellation left a protected-print session in `PREPARING` and
