@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "purpose": "Version-pinned RC16 supervised source inventory. Git blob IDs, not a cryptographic signature or unattended-print qualification. RC16 cancellation lifecycle patch appended 2026-11-24. 2026-11-24 operator-owned ON/OFF fix and version-pinned updater. 2026-11-24 supervised safe fresh retry after certified no-write cancellation. 2026-11-26 local independent annular corroboration for false-rejected T0 camera rims.",
+  "purpose": "Version-pinned RC16 supervised source inventory. Git blob IDs, not a cryptographic signature or unattended-print qualification. RC16 cancellation lifecycle patch appended 2026-11-24. 2026-11-24 operator-owned ON/OFF fix and version-pinned updater. 2026-11-24 supervised safe fresh retry after certified no-write cancellation. 2026-11-26 local independent annular corroboration for false-rejected T0 camera rims. 2026-11-27 supervised retirement of legacy Trial04 print interceptor.",
   "source_commit": "d0c9c286563c7b3ec3768a3c27f6dfa69b7dc21a",
   "controller_version": "0.5.0-rc16-dev1",
   "hash_algorithm": "git-blob-sha1",
@@ -21,6 +21,7 @@
     "scripts/rc16_ratos_api_probe.py": "02f14402be6a22502d695e6f7bf421a594c22631",
     "scripts/rc16_read_only_preflight.py": "f2e095845c6d8af1e2b786efbdabadfa82e0de80",
     "scripts/rc16_release_install.py": "e48139754192f3e746cae4b380c1426360c4e6b6",
+    "scripts/rc16_retire_trial04_recovery.py": "46e571350638a5a011b7e176bcca95c308d81d23",
     "scripts/rc16_safe_no_write_refresh.py": "2ed150ad6e9d95ef9754c333ff8759693551fbe1",
     "scripts/rc16_stage_upgrade.py": "becda342b48afef7e6ade4b25b119e5bc2032b31",
     "scripts/rc16_timestamped_gcode_refresh.py": "4448f6587f744e129d62d4649e5cec215eefba2e",
