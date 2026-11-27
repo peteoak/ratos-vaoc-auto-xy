@@ -37,6 +37,35 @@ This is concrete evidence of successful guarded calibrations, a fail-closed came
 
 The latest pre-merge RC16 source CI completed **370 tests, 5 skipped**. CI runs without the target physical MCU, printer endstops, camera geometry, Beacon and RatOS workload; it does not replace live verification. The additional documentation/manifest checks are tracked separately from camera and motion qualification.
 
+## 27 November 2026 — retire active legacy Trial04 file interception
+
+Observed a COPY-mode job (`TOTAL_TOOLSHIFTS=0`) that was staged as
+`AutoXY_...gcode` and printed with the message
+`AutoXY Recovery: print staged via RatOS`. The printer-supplied exact
+source `/home/pi/auto_xy/klipper/auto_xy_local_recovery.py` is Trial04,
+SHA256 `12ddf4100b6b61cbb71f3cc1b26d0d87e2134a8c9cbdb0385f83aba50e11c03f`.
+Its Klipper extension path is a symlink to the same source, and
+`printer.cfg` includes `auto_xy_local_recovery.cfg`.
+
+Trial04 registers `PROCESS_GCODE_FILE` and stages ALL prints. The new
+RC16 coordinator instead delegates COPY/MIRROR directly to the native
+RatOS print processor, with no AutoXY file generation or worker.
+Both extensions can register the same command: leaving Trial04 active
+can shadow RC16 depending on ready-handler order, even though the
+new RC16 extension itself reports `armed`.
+
+The supervised `scripts/rc16_retire_trial04_recovery.py` migration
+requires the exact reviewed legacy code/symlink, precisely one include,
+RC16 active with no print, paused job, VAOC or fault, and checks
+protected SD/resume API guards *after* one Klipper restart. It comments
+out **only** the Trial04 include in `printer.cfg`, creates an exact
+rollback snapshot and restores the original on postflight failure.
+The Trial04 Python source, symlink, legacy config, user offsets,
+camera references, RatOS software and G-code files are left in place.
+The older `AUTOXY_RECOVERY_STATUS` command is no longer exposed
+after successful retirement; `AUTOXY_RC16_HANDOFF_STATUS` is used instead.
+Supervised COPY/MIRROR and independent T0/T1 tests remain necessary.
+
 ## 26 November 2026 — T0 preflight false-rejection from annular global peak
 
 The 25 November T0 diagnostic bundle contains two 1920x1080 normally
