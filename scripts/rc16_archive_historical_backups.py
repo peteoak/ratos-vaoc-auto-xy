@@ -148,6 +148,17 @@ def verify_archive(snapshot, archive_path):
             wanted = snapshot['entries'][name]
             require(member.mode == wanted['mode'] and member.uid == wanted['uid']
                     and member.gid == wanted['gid'], 'Archive metadata differs: '+name)
+            # PAX timestamps retain fractions of a second; the tolerance only
+            # accommodates float rounding at Unix epoch scale, not changed times.
+            require(abs(member.mtime - wanted['mtime_ns'] / 1_000_000_000) < 0.001,
+                    'Archive timestamp differs: '+name)
+            if member.islnk():
+                # A tar hardlink must refer to a file *inside* the same
+                # inventoried backup set, never an external pathname.
+                link_target = relative_safe(member.linkname)
+                require(link_target in snapshot['entries'] and
+                        snapshot['entries'][link_target]['kind'] == 'file',
+                        'Untrusted archive hardlink target: '+name)
             if member.isdir():
                 require(wanted['kind'] == 'directory', 'Directory mismatch')
                 actual[name] = {'kind':'directory'}
