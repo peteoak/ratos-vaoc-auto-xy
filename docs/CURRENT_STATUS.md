@@ -127,3 +127,7 @@ After each meaningful merge or new real printer test, update this file with **da
 ## 28 November 2026 — archive integrity hardening pending validation (PR #25)
 
 A draft branch adds explicit source-to-archive modification timestamp checks and confines archived tar hardlinks to inventoried regular-file targets. It includes negative tests for a tampered timestamp and an external hardlink target. **PR #25 is unmerged and CI status is not yet confirmed.** This does not change print execution, printer installation or backup source files. No actual USB/archive run has been confirmed; no new cleanup/deletion is authorised.
+
+## 29 November 2026 — owner inventory confirmed; Windows network archive candidate
+
+Owner ran the 5db9a0f archive tool's `plan` on the Pi. It returned: pre-uninstall **789,665,990 B / 7,868 files**, factory-backups **715,990,122 B / 1,461 files**, RC15 quarantine **652,242,653 B / 4,700 files**, retained config ZIPs **2,243,046,213 B / 3 files**; combined **4,400,944,978 B / 14,032 files**. It reported no files written/deleted. The owner cannot connect a USB drive because the printer has no spare USB ports. An SSH-to-Windows archive streaming candidate and PC receipt verifier have therefore been developed on draft PR #25; see [Windows network backup guide](RC16_PC_NETWORK_BACKUP.md). The printer has not run the network-stream operation; no off-device backup is confirmed and no unique-backup deletion is authorised. Fresh automated test/CI evidence must be checked on the final revision before directing use.
