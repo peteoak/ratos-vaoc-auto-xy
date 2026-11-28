@@ -246,7 +246,8 @@ def backup(home, mount, *, strict_external=True, archive_stamp=None):
 
 # Private binary protocol for an SSH-to-PC transfer. All archive bytes go
 # directly to stdout; nothing is staged or deleted on the printer.
-NETWORK_MAGIC = b'AUTOXY_RC16_BACKUP_STREAM_V1\\n'.replace(b'\\n', b'\n')
+NETWORK_MAGIC = b'AUTOXY_RC16_BACKUP_STREAM_V1\n'
+NETWORK_DONE = b'\nAUTOXY_RC16_BACKUP_STREAM_COMPLETE_V1\n'
 
 
 def network_stream_group(home, group, output):
@@ -265,6 +266,8 @@ def network_stream_group(home, group, output):
     after = scan_group(home, group, hash_files=True)
     require(source_manifest_equal(before, after),
             'Backup changed while streaming group: '+group)
+    output.write(NETWORK_DONE)
+    output.flush()
 
 
 def verify_set(home, target, *, strict_external=True):
