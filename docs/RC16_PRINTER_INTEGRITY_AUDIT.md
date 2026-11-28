@@ -32,6 +32,7 @@ Substitute the exact output name. The pinned release commit will be given alongs
 - Active `printer.cfg` include names and selected AutoXY/VAOC section headings.
 - Klipper `extras` extension file metadata, symlink targets and SHA256 / Git blob digests.
 - Bounded inventory of AutoXY Python/cfg/shell scripts, with only **hook-name + line-number evidence**, no full code.
+- **Aggregate file counts and disk usage** for AutoXY installation/backup/download directories and known run/registry/G-code storage; no individual customer filenames or file contents. Inventory can identify size pressure, but never authorises bulk deletion.
 - Current reviewed GitHub source-digest comparisons, labelled MATCH / DIFFERS_OR_OLDER / UNAVAILABLE. A mismatch alone does not prove an unwanted extension.
 - Sanitized Moonraker values: print/SD/VAOC and RC16-hand-off booleans, operator ON/fault flags; **not** temperatures, positions, saved offsets, selected G-code names or configuration values.
 - Potential systemd/cron references by filename and matching line number only.
