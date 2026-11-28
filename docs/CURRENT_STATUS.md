@@ -20,6 +20,14 @@
 | Recent adverse observation | 27 Nov COPY print correctly captured `TOTAL_TOOLSHIFTS=0` yet legacy Trial04 still staged it as `AutoXY_...gcode` |
 | New ChatGPT continuity | [Engineering handover](DEVELOPMENT_HANDOVER.md) and this status file exist in GitHub; ChatGPT Project instructions are managed separately |
 
+## 28 November 2026 — no-delete external backup phase prepared
+
+To protect irreplaceable printer configuration and commissioned geometry before reclaiming further historical storage, a separate **no-delete** archiver has been added at `scripts/rc16_archive_historical_backups.py`, with [operator guide](RC16_HISTORICAL_BACKUP_ARCHIVE.md). It inventories and preserves exactly three historical directories (`autoxy-pre-uninstall-20261102-040312`, `autoxy-factory-backups`, `autoxy-quarantine-rc15-dev5-20261102`) plus the **three surviving** current-config `config-*.zip` archives.
+
+`plan` is read-only; `archive --drive` requires a separately mounted filesystem, writes directly to that destination and independently SHA256-verifies each file and tar member, preserving symlinks and metadata, with no temporary archive written on the Pi. `verify --archive-dir` re-checks archives and source equality. This tool cannot remove source files or change active AutoXY, native RatOS, offsets or G-code. A small audited receipt is stored **only on the external device** and may include private filenames.
+
+**Status:** implemented and offline tested, **not yet run on the owner Pi**, and **no external backup is confirmed**. The old `4.40 GB` historical directory figure preceded the deletion of ~2.24 GB of duplicate ZIPs and is now stale. No further historical directory deletion is approved. Next action: confirm a physically independent USB/network destination; run `plan`; then archive and verify all four groups under supervised owner access. Treat any failure or changed-source warning as a stop condition.
+
 ## 28 November 2026 — seven obsolete RC15 ZIP packages retired on printer (owner confirmed)
 
 The owner ran `scripts/rc16_loose_zip_cleanup.py check` and supplied the exact plan at `/home/pi/AutoXY_Zip_Package_Plan_20261128T102009147506Z.json`. It identified **seven** root-level historical RC15 ZIPs totalling **2,104,784 bytes**. The first removal attempt used a placeholder plan name and **refused without deletion**. The owner then ran `remove --plan` against the exact plan, entered `DELETE OLD PACKAGES`, and supplied seven `REMOVED` lines. The script printed `No AutoXY/Klipper active files, config, backups, references or G-code changed.` Receipt: `/home/pi/auto_xy/rollbacks/zip-package-retirement-20261128T102222612699Z.json`.
