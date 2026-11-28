@@ -4,6 +4,12 @@
 
 **Evidence:** `AutoXY_Printer_Integrity_Audit_20261128_091706.zip`, SHA256 `690ea2b03b72d83f443a0b00a682d73abcea621450511cb5d21d76b7f563ae09`. The ZIP was reviewed privately, **not** committed to GitHub. Generated on the RatOS Pi. The audit lists metadata and static hook locations, not complete live Python command ownership or contents of all included RatOS configs.
 
+## Confirmed on the RatOS Pi after the inventory (28 November)
+
+The owner has now run the scoped retirement tool successfully. It printed `PRECHECK PASS` for both `check` and `retire`, confirmed RC16's guarded state and the exact reviewed symlink/target, removed **only** `/home/pi/klipper/klippy/extras/auto_xy_local_recovery.py`, and retained the historical source. The rollback receipt is `/home/pi/auto_xy/rollbacks/retired-inactive-trial04-h1_8r5f6/receipt.json`. Two separate shell checks proved the symlink is absent and the source exists. No restart or offsets/config/G-code edit was reported. **The dormant import retirement is COMPLETE on the printer.** The pre-retirement descriptions below describe the initial audit and should not be read as its current symlink state.
+
+A **post-retirement COPY/MIRROR/native single-tool print test** and a protected independent dual-tool print test remain distinct, supervised hardware verification tasks. The static inventory and symlink removal do not certify unattended operation.
+
 ## Verified from inventory
 
 - Moonraker connected; prior print state `complete`, SD inactive/unselected, native VAOC closed. Saved flags: AutoXY ON, no FAULT, no IN_PROGRESS, not measure-only, no retry available.
