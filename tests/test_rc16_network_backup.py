@@ -55,7 +55,7 @@ class NetworkArchiveTests(unittest.TestCase):
         self.assertTrue(server.verify_archive(snapshot, dest))
 
     def test_truncated_stream_cannot_be_verified(self):
-        with self.assertRaisesRegex(server.Refuse, "completion|footer|Missing"):
+        with self.assertRaisesRegex(client.archive.Refuse, "completion|footer|Missing"):
             client.receive(io.BytesIO(self.stream()[:-12]),
                            self.out / "truncated.tar.gz", "old")
 
@@ -75,12 +75,12 @@ class NetworkArchiveTests(unittest.TestCase):
         self.assertFalse(buf.getvalue().endswith(server.NETWORK_DONE))
 
     def test_refuse_unexpected_group(self):
-        with self.assertRaisesRegex(server.Refuse, "Unexpected source inventory"):
+        with self.assertRaisesRegex(client.archive.Refuse, "Unexpected source inventory"):
             client.receive(io.BytesIO(self.stream()),
                            self.out / "other.tar.gz", "other")
 
     def test_refuse_non_protocol_stdout(self):
-        with self.assertRaisesRegex(server.Refuse, "Unexpected SSH stdout"):
+        with self.assertRaisesRegex(client.archive.Refuse, "Unexpected SSH stdout"):
             client.receive(io.BytesIO(b"X" * len(server.NETWORK_MAGIC)),
                            self.out / "bad.tar.gz", "old")
 
