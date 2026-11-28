@@ -20,7 +20,15 @@
 | Recent adverse observation | 27 Nov COPY print correctly captured `TOTAL_TOOLSHIFTS=0` yet legacy Trial04 still staged it as `AutoXY_...gcode` |
 | New ChatGPT continuity | [Engineering handover](DEVELOPMENT_HANDOVER.md) and this status file exist in GitHub; ChatGPT Project instructions are managed separately |
 
-## 28 November 2026 — reviewed optional legacy installer ZIP pruning (not yet run on printer)
+## 28 November 2026 — seven obsolete RC15 ZIP packages retired on printer (owner confirmed)
+
+The owner ran `scripts/rc16_loose_zip_cleanup.py check` and supplied the exact plan at `/home/pi/AutoXY_Zip_Package_Plan_20261128T102009147506Z.json`. It identified **seven** root-level historical RC15 ZIPs totalling **2,104,784 bytes**. The first removal attempt used a placeholder plan name and **refused without deletion**. The owner then ran `remove --plan` against the exact plan, entered `DELETE OLD PACKAGES`, and supplied seven `REMOVED` lines. The script printed `No AutoXY/Klipper active files, config, backups, references or G-code changed.` Receipt: `/home/pi/auto_xy/rollbacks/zip-package-retirement-20261128T102222612699Z.json`.
+
+**Confirmed filesystem outcome:** Seven scoped, obsolete historical RC15 package ZIPs deleted from `/home/pi` with no reported errors, on the actual RatOS Pi. Their contents were **not** backed up off-device in this step and the metadata receipt is not a restore archive. Do not offer this operation as still pending or rerun this plan. Together with the three prior SHA256-verified duplicate config ZIP removals (2,243,046,213 bytes), the two on-printer ZIP cleanup operations unlinked **2,245,150,997 bytes** of archive data (~2.245 GB decimal, subject to disk block accounting).
+
+**Still protected:** the three unique retained `/home/pi/printer_data/config/config-*.zip` archives, camera commissioning ZIPs, diagnostic ZIPs, active `auto_xy`, native RatOS, G-code and historical backup directories. The next substantial storage task is to **archive historical backups off the Pi, verify file integrity/uniqueness and only then propose narrowly bounded deletion**. No off-Pi backup confirmation yet.
+
+## 28 November 2026 — reviewed optional legacy installer ZIP pruning (historical pre-execution plan)
 
 Following the owner's verified removal of three duplicate config ZIPs, a separate, narrowly scoped `scripts/rc16_loose_zip_cleanup.py` was prepared for **seven small, known old RC15 download packages directly under /home/pi**. It offers read-only `check` and hash/inode/mtime-bound plan followed by interactive `remove`, and preserves all diagnostics, camera references, config ZIPs, active AutoXY code, rollback trees, historical backup directories, Klipper and G-code. The deletion receipt records exact file identities, **not a restorable copy**. The source and tests are [documented here](RC16_LOOSE_ZIP_CLEANUP.md).
 
