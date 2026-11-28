@@ -81,7 +81,7 @@ class NetworkArchiveTests(unittest.TestCase):
 
     def test_refuse_non_protocol_stdout(self):
         with self.assertRaisesRegex(server.Refuse, "Unexpected SSH stdout"):
-            client.receive(io.BytesIO(b"untrusted terminal banner text"),
+            client.receive(io.BytesIO(b"X" * len(server.NETWORK_MAGIC)),
                            self.out / "bad.tar.gz", "old")
 
 
