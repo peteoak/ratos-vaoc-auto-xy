@@ -20,6 +20,12 @@
 | Recent adverse observation | 27 Nov COPY print correctly captured `TOTAL_TOOLSHIFTS=0` yet legacy Trial04 still staged it as `AutoXY_...gcode` |
 | New ChatGPT continuity | [Engineering handover](DEVELOPMENT_HANDOVER.md) and this status file exist in GitHub; ChatGPT Project instructions are managed separately |
 
+## 28 November 2026 — confirmed duplicate historical config ZIP cleanup
+
+The owner ran an on-Pi SHA256 comparison of three **separate-inode, byte-identical** historical archive pairs in `/home/pi/printer_data/config/` and `/home/pi/autoxy-pre-uninstall-20261102-040312/config/`. Exact sizes: 1,281,689,218 B, 640,865,812 B and 320,491,183 B. The owner then ran a bounded, exact-name/expected-size/SHA256-verified removal script and supplied output confirming `PREFLIGHT PASS: 3 exact duplicates verified`, three `REMOVED` paths under the **pre-uninstall backup directory only**, and `DONE: Current config copies remain untouched`.
+
+**Confirmed outcome:** 2,243,046,213 bytes (~2.24 GB / 2.09 GiB) of duplicate archive file data unlinked from the historical folder, with all three copies retained in the current config folder. Exact live filesystem free-space increase was not measured. No active AutoXY code, settings, references or firmware were modified by the script. **No separate off-Pi backup was confirmed**; do not delete the three retained config ZIPs until external copies are verified. Other historical folder/ZIP cleanup remains unapproved and requires a scoped review.
+
 ## 28 November 2026 — Trial04 dormant import symlink **retired on printer (owner verified)**
 
 The owner ran the exact reviewed `scripts/rc16_retire_inactive_trial04_extension.py` from a pinned GitHub source at `/home/pi/AutoXY_RC16_Cleanup`. The actual Pi output confirms:
