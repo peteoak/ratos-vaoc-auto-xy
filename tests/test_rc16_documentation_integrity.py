@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CURRENT = [
     ROOT / 'docs/DEVELOPMENT_HANDOVER.md',
     ROOT / 'docs/CURRENT_STATUS.md',
+    ROOT / 'docs/RC16_PRINTER_INTEGRITY_AUDIT.md',
     ROOT / 'README.md',
     ROOT / 'docs/RC16_START_HERE.md',
     ROOT / 'docs/RC16_RELEASE_STATUS.md',
