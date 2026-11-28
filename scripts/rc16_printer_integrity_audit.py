@@ -290,6 +290,54 @@ def extension_inventory(home, root):
     return results
 
 
+def storage_footprint(home):
+    """Aggregate sizes for known AutoXY directories; NO contents/names of files.
+
+    Never traverse symlinks, hidden unrelated home directories, image files,
+    printer config or customer G-code contents. Bound runtime on busy media.
+    """
+    roots = []
+    try:
+        for p in sorted(home.iterdir()):
+            if (p.is_dir() and not p.is_symlink() and
+                    p.name.lower().startswith(('autoxy', 'auto_xy',
+                                               'ratos-vaoc-auto-xy'))):
+                roots.append(p)
+                if len(roots) >= 80:
+                    break
+    except OSError:
+        return {'unavailable':True, 'directories':[]}
+    # Distinguish images and generated file storage from code under auto_xy.
+    for name in ('auto_xy/print_gate_runs', 'auto_xy/rollbacks',
+                 'auto_xy/rc16_registry', 'printer_data/gcodes'):
+        p=home/name
+        if p.is_dir() and not p.is_symlink() and p not in roots:
+            roots.append(p)
+    groups = []
+    for root in roots:
+        total=files=directories=0
+        truncated=False
+        for parent, dirs, names in os.walk(root, followlinks=False):
+            directories+=1
+            dirs[:]=[d for d in dirs if not (Path(parent)/d).is_symlink()]
+            if directories>15000 or files>250000:
+                truncated=True
+                break
+            for filename in names:
+                path=Path(parent)/filename
+                try:
+                    if not path.is_symlink() and path.is_file():
+                        total+=path.stat().st_size
+                        files+=1
+                except OSError:
+                    continue
+        groups.append({'directory':str(root.relative_to(home)),
+                       'file_count':files, 'bytes':total,
+                       'truncated':truncated})
+    return {'directories':groups, 'no_contents_read':True,
+            'note':'Aggregate disk footprint, not proof that files are safe to delete'}
+
+
 def system_hooks(home):
     """Read only names/line numbers of related cron/systemd startup files."""
     candidates = [
@@ -395,6 +443,7 @@ def collect(home, repo_root, *, runtime=None, scan_system=False):
             'active_in_configuration':legacy_on,
         },
         'system_startup_candidates':system_hooks(home) if scan_system else [],
+        'storage_footprint':storage_footprint(home),
         'review_indicators':sorted(set(indicators)),
         'other_processor_hook_paths':alternative,
     }
@@ -416,6 +465,11 @@ def text_summary(report):
         lines.append('  '+item['result']+': '+item['installed_path'])
     lines += ['', 'Review indicators:']
     lines += ['  '+x for x in report['review_indicators']] or ['  none']
+    lines += ['', 'AutoXY-related storage (aggregate; review before cleanup):']
+    for folder in report.get('storage_footprint',{}).get('directories',[]):
+        lines.append('  '+folder['directory']+': '+str(folder['bytes'])+
+                     ' bytes across '+str(folder['file_count'])+' files'+
+                     (' (partial)' if folder['truncated'] else ''))
     lines += ['', 'IMPORTANT: Do NOT delete/quarantine anything just from these flags.']
     return '\n'.join(lines)+'\n'
 
