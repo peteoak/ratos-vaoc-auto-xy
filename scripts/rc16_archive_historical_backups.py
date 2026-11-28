@@ -7,6 +7,7 @@ mounted external filesystem supplied by the operator.
 """
 import argparse
 import datetime
+import gzip
 import hashlib
 import json
 import os
@@ -258,10 +259,13 @@ def network_stream_group(home, group, output):
     output.write(NETWORK_MAGIC)
     output.write(str(len(manifest)).encode('ascii') + b'\n')
     output.write(manifest)
-    with tarfile.open(fileobj=output, mode='w|gz', compresslevel=1,
-                      format=tarfile.PAX_FORMAT, dereference=False) as tar:
-        for name in GROUPS[group]:
-            tar.add(Path(home)/name, arcname=name, recursive=True)
+    # Streaming tarfile's w|gz mode on Python 3.11 does not accept
+    # compresslevel; wrap its uncompressed stream in an explicit gzip file.
+    with gzip.GzipFile(fileobj=output, mode='wb', compresslevel=1) as zipped:
+        with tarfile.open(fileobj=zipped, mode='w|',
+                          format=tarfile.PAX_FORMAT, dereference=False) as tar:
+            for name in GROUPS[group]:
+                tar.add(Path(home)/name, arcname=name, recursive=True)
     output.flush()
     after = scan_group(home, group, hash_files=True)
     require(source_manifest_equal(before, after),
