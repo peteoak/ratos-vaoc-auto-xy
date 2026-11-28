@@ -20,6 +20,12 @@
 | Recent adverse observation | 27 Nov COPY print correctly captured `TOTAL_TOOLSHIFTS=0` yet legacy Trial04 still staged it as `AutoXY_...gcode` |
 | New ChatGPT continuity | [Engineering handover](DEVELOPMENT_HANDOVER.md) and this status file exist in GitHub; ChatGPT Project instructions are managed separately |
 
+## 28 November 2026 — reviewed optional legacy installer ZIP pruning (not yet run on printer)
+
+Following the owner's verified removal of three duplicate config ZIPs, a separate, narrowly scoped `scripts/rc16_loose_zip_cleanup.py` was prepared for **seven small, known old RC15 download packages directly under /home/pi**. It offers read-only `check` and hash/inode/mtime-bound plan followed by interactive `remove`, and preserves all diagnostics, camera references, config ZIPs, active AutoXY code, rollback trees, historical backup directories, Klipper and G-code. The deletion receipt records exact file identities, **not a restorable copy**. The source and tests are [documented here](RC16_LOOSE_ZIP_CLEANUP.md).
+
+**Printer execution status: not run**; small optional cleanup is independent of remaining ~4.4 GB historical backups, which require off-device verified archival before any deletion. No evidence of a newly intrusive active Klipper interceptor has arisen.
+
 ## 28 November 2026 — confirmed duplicate historical config ZIP cleanup
 
 The owner ran an on-Pi SHA256 comparison of three **separate-inode, byte-identical** historical archive pairs in `/home/pi/printer_data/config/` and `/home/pi/autoxy-pre-uninstall-20261102-040312/config/`. Exact sizes: 1,281,689,218 B, 640,865,812 B and 320,491,183 B. The owner then ran a bounded, exact-name/expected-size/SHA256-verified removal script and supplied output confirming `PREFLIGHT PASS: 3 exact duplicates verified`, three `REMOVED` paths under the **pre-uninstall backup directory only**, and `DONE: Current config copies remain untouched`.

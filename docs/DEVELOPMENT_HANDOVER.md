@@ -89,6 +89,8 @@ Read [RC16 source manifest](RC16_SOURCE_MANIFEST.json), [start guide](RC16_START
 
 **28 November on-printer ZIP deduplication:** The owner hash-verified three pairs of historical `config-*.zip` files (different inodes, identical SHA256) and ran an exact-name/size/hash-scoped deletion of only the copies under `/home/pi/autoxy-pre-uninstall-20261102-040312/config/`. Console output confirms three removals, total 2,243,046,213 bytes; corresponding files in `/home/pi/printer_data/config/` were preserved. No off-printer backup is yet confirmed, and no further ZIP/backup deletion is authorized from this observation alone. See [status](CURRENT_STATUS.md).
 
+**28 November optional legacy package pruning:** A strictly allowlisted, reviewed `scripts/rc16_loose_zip_cleanup.py` targets only seven small historical RC15 **root-level downloadable ZIP packages** and expressly excludes diagnostic ZIPs, config backups, camera references, active AutoXY/RC16 code and large historical backup directories. It creates a SHA256/inode/mtime-bound plan before optional interactive deletion, with receipt but **no content restore**. This cleanup has **not been executed on the printer**; the earlier three duplicate-config ZIP removals remain the only printer-confirmed ZIP deletion. See [ZIP cleanup guide](RC16_LOOSE_ZIP_CLEANUP.md).
+
 ## Open priorities (recheck against live code and printer evidence)
 
 1. **Confirm installed source/version** only when needed; the latest GitHub PR #14 and PR #15 updates are **not confirmed installed** by the conversation. Do not issue a non-matching old updater.

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "purpose": "Version-pinned RC16 supervised source inventory. Git blob IDs, not a cryptographic signature or unattended-print qualification. RC16 cancellation lifecycle patch appended 2026-11-24. 2026-11-24 operator-owned ON/OFF fix and version-pinned updater. 2026-11-24 supervised safe fresh retry after certified no-write cancellation. 2026-11-26 local independent annular corroboration for false-rejected T0 camera rims. 2026-11-27 supervised retirement of legacy Trial04 print interceptor. 2026-11-28 read-only Pi code and print interception inventory before manual cleanup. 2026-11-28 safe reversible retirement of confirmed inactive Trial04 Klipper import symlink.",
+  "purpose": "Version-pinned RC16 supervised source inventory. Git blob IDs, not a cryptographic signature or unattended-print qualification. RC16 cancellation lifecycle patch appended 2026-11-24. 2026-11-24 operator-owned ON/OFF fix and version-pinned updater. 2026-11-24 supervised safe fresh retry after certified no-write cancellation. 2026-11-26 local independent annular corroboration for false-rejected T0 camera rims. 2026-11-27 supervised retirement of legacy Trial04 print interceptor. 2026-11-28 read-only Pi code and print interception inventory before manual cleanup. 2026-11-28 safe reversible retirement of confirmed inactive Trial04 Klipper import symlink. 2026-11-28 optional exact allowlist root-level old installer ZIP cleanup; config/diagnostic backups excluded.",
   "source_commit": "d0c9c286563c7b3ec3768a3c27f6dfa69b7dc21a",
   "controller_version": "0.5.0-rc16-dev1",
   "hash_algorithm": "git-blob-sha1",
@@ -17,6 +17,7 @@
     "scripts/rc16_commission_camera.py": "f32bf5fc1711ba76904fe687670c452e2624c685",
     "scripts/rc16_fresh_install.py": "6df7243a86803aed91d9db98ea6a909d2bd7a0fb",
     "scripts/rc16_local_annular_refresh.py": "2571da1ab80a26e17a4781df80fe96feaa663ccf",
+    "scripts/rc16_loose_zip_cleanup.py": "02575411db5aa11997d74c690a48a99fb2cf3ca7",
     "scripts/rc16_operator_enable_refresh.py": "1a94a08d199fc5c724fbd19b9b12dd382669b8f0",
     "scripts/rc16_printer_integrity_audit.py": "3a3dab3ecee6b5c5fa7ae7c78707eb240e7f7f21",
     "scripts/rc16_ratos_api_probe.py": "02f14402be6a22502d695e6f7bf421a594c22631",
