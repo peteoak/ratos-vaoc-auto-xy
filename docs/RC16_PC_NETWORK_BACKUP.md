@@ -1,6 +1,6 @@
 # RC16: Windows network backup without a printer USB port
 
-Status: development candidate, subject to CI. No backup deletion or printer calibration changes.
+Status: merged in PR #25 at commit 264b9bf2b282e26d6b2d531687c32a02b1a56dd4; GitHub offline suite: 469 tests run, 5 skipped, PASS. Physical Windows-Pi transfer still not performed. No backup deletion or printer calibration changes.
 
 The owner ran the read-only inventory on the actual Pi and confirmed four groups totaling 4,400,944,978 bytes and 14,032 files. This is source discovery, not yet a verified off-device backup.
 
@@ -15,7 +15,7 @@ Requirements: Python 3 and OpenSSH on Windows, at least 6 GiB free, an SSH conne
 ## Download on Pi SSH terminal
 
 ~~~bash
-REV="<PINNED_TESTED_SHA>"
+REV="264b9bf2b282e26d6b2d531687c32a02b1a56dd4"
 mkdir -p /home/pi/AutoXY_Historical_Archive_Tool
 curl -fL --retry 3 "https://raw.githubusercontent.com/peteoak/ratos-vaoc-auto-xy/$REV/scripts/rc16_archive_historical_backups.py" -o /home/pi/AutoXY_Historical_Archive_Tool/rc16_archive_historical_backups.py
 python3 -B /home/pi/AutoXY_Historical_Archive_Tool/rc16_archive_historical_backups.py plan
@@ -24,7 +24,7 @@ python3 -B /home/pi/AutoXY_Historical_Archive_Tool/rc16_archive_historical_backu
 ## Windows PowerShell
 
 ~~~powershell
-$Revision = "<PINNED_TESTED_SHA>"
+$Revision = "264b9bf2b282e26d6b2d531687c32a02b1a56dd4"
 $ToolFolder = "$HOME\AutoXY_PC_Backup_Tool"
 New-Item -ItemType Directory -Force -Path $ToolFolder | Out-Null
 $Base = "https://raw.githubusercontent.com/peteoak/ratos-vaoc-auto-xy/$Revision/scripts"
