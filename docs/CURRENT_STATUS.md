@@ -123,3 +123,7 @@ Source inventory: [RC16_SOURCE_MANIFEST.json](RC16_SOURCE_MANIFEST.json). See [R
 After each meaningful merge or new real printer test, update this file with **dated** code commit/CI, installed-state evidence, supervised findings, outstanding risks and a single recommended next action; update [DEVELOPMENT_HANDOVER.md](DEVELOPMENT_HANDOVER.md) when a durable architecture or safety rule changes. Preserve the existing RC15 archived release/manifest.
 
 **New-chat starting instruction:** “Continue AutoXY. Read `docs/DEVELOPMENT_HANDOVER.md` and `docs/CURRENT_STATUS.md`, inspect current `main` and relevant CI, and continue the highest-priority unresolved work without assuming any GitHub update was installed.”
+
+## 28 November 2026 — archive integrity hardening pending validation (PR #25)
+
+A draft branch adds explicit source-to-archive modification timestamp checks and confines archived tar hardlinks to inventoried regular-file targets. It includes negative tests for a tampered timestamp and an external hardlink target. **PR #25 is unmerged and CI status is not yet confirmed.** This does not change print execution, printer installation or backup source files. No actual USB/archive run has been confirmed; no new cleanup/deletion is authorised.
