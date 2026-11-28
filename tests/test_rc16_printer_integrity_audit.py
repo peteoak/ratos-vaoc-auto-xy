@@ -73,6 +73,16 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(observed['installed_source_vs_repo'][0]['result'],'MATCH_CURRENT_SOURCE')
         self.assertEqual(observed['other_processor_hook_paths'],['klipper/klippy/extras/weird_plugin.py'])
 
+    def test_storage_metadata_does_not_export_private_file_names_or_contents(self):
+        report=audit.collect(self.home,self.repo,runtime={'connected':False})
+        entries=report['storage_footprint']['directories']
+        self.assertTrue(entries)
+        self.assertTrue(all(x['bytes']>=0 and x['file_count']>=0 for x in entries))
+        snapshot=json.dumps(entries)
+        self.assertNotIn('2026_PRIVATE_CUSTOMER',snapshot)
+        self.assertNotIn('secret.jpg',snapshot)
+        self.assertNotIn('SECRET_IMAGE_BYTES',snapshot)
+
     def test_zip_is_private_and_does_not_overwrite_or_mutate_code(self):
         before=(self.home/'printer_data/config/printer.cfg').read_bytes()
         report=audit.collect(self.home,self.repo,runtime={'connected':False})
