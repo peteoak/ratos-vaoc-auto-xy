@@ -243,6 +243,30 @@ def backup(home, mount, *, strict_external=True, archive_stamp=None):
     return target
 
 
+
+# Private binary protocol for an SSH-to-PC transfer. All archive bytes go
+# directly to stdout; nothing is staged or deleted on the printer.
+NETWORK_MAGIC = b'AUTOXY_RC16_BACKUP_STREAM_V1\\n'.replace(b'\\n', b'\n')
+
+
+def network_stream_group(home, group, output):
+    """Stream one allowlisted tar.gz plus its source inventory to the PC."""
+    before = scan_group(home, group, hash_files=True)
+    manifest = json.dumps(before, sort_keys=True).encode('utf-8')
+    require(len(manifest) <= 15*1024*1024, 'Source manifest exceeds transfer bound')
+    output.write(NETWORK_MAGIC)
+    output.write(str(len(manifest)).encode('ascii') + b'\n')
+    output.write(manifest)
+    with tarfile.open(fileobj=output, mode='w|gz', compresslevel=1,
+                      format=tarfile.PAX_FORMAT, dereference=False) as tar:
+        for name in GROUPS[group]:
+            tar.add(Path(home)/name, arcname=name, recursive=True)
+    output.flush()
+    after = scan_group(home, group, hash_files=True)
+    require(source_manifest_equal(before, after),
+            'Backup changed while streaming group: '+group)
+
+
 def verify_set(home, target, *, strict_external=True):
     home, target = Path(home), Path(target)
     require(target.is_dir() and not target.is_symlink(), 'Missing archive directory')
@@ -280,10 +304,15 @@ def main(argv=None):
     sub.add_parser('plan')
     arch = sub.add_parser('archive')
     arch.add_argument('--drive',required=True,help='EXACT mount point of a separate USB drive')
+    remote = sub.add_parser('network-stream', help='Binary archive stream for authenticated SSH client only')
+    remote.add_argument('--group', required=True, choices=sorted(GROUPS))
     check = sub.add_parser('verify')
     check.add_argument('--archive-dir',required=True,help='Exact verified archive set directory')
     args = parser.parse_args(argv)
     try:
+        if args.action == 'network-stream':
+            network_stream_group(HOME, args.group, sys.stdout.buffer)
+            return 0
         if args.action == 'plan':
             print('READ ONLY: historical backup and retained config ZIP sizes')
             print_report(total_report(HOME))
