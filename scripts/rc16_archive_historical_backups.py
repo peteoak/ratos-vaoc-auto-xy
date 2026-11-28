@@ -7,6 +7,7 @@ mounted external filesystem supplied by the operator.
 """
 import argparse
 import datetime
+import gzip
 import hashlib
 import json
 import os
@@ -148,6 +149,17 @@ def verify_archive(snapshot, archive_path):
             wanted = snapshot['entries'][name]
             require(member.mode == wanted['mode'] and member.uid == wanted['uid']
                     and member.gid == wanted['gid'], 'Archive metadata differs: '+name)
+            # PAX timestamps retain fractions of a second; the tolerance only
+            # accommodates float rounding at Unix epoch scale, not changed times.
+            require(abs(member.mtime - wanted['mtime_ns'] / 1_000_000_000) < 0.001,
+                    'Archive timestamp differs: '+name)
+            if member.islnk():
+                # A tar hardlink must refer to a file *inside* the same
+                # inventoried backup set, never an external pathname.
+                link_target = relative_safe(member.linkname)
+                require(link_target in snapshot['entries'] and
+                        snapshot['entries'][link_target]['kind'] == 'file',
+                        'Untrusted archive hardlink target: '+name)
             if member.isdir():
                 require(wanted['kind'] == 'directory', 'Directory mismatch')
                 actual[name] = {'kind':'directory'}
@@ -232,6 +244,36 @@ def backup(home, mount, *, strict_external=True, archive_stamp=None):
     return target
 
 
+
+# Private binary protocol for an SSH-to-PC transfer. All archive bytes go
+# directly to stdout; nothing is staged or deleted on the printer.
+NETWORK_MAGIC = b'AUTOXY_RC16_BACKUP_STREAM_V1\n'
+NETWORK_DONE = b'\nAUTOXY_RC16_BACKUP_STREAM_COMPLETE_V1\n'
+
+
+def network_stream_group(home, group, output):
+    """Stream one allowlisted tar.gz plus its source inventory to the PC."""
+    before = scan_group(home, group, hash_files=True)
+    manifest = json.dumps(before, sort_keys=True).encode('utf-8')
+    require(len(manifest) <= 15*1024*1024, 'Source manifest exceeds transfer bound')
+    output.write(NETWORK_MAGIC)
+    output.write(str(len(manifest)).encode('ascii') + b'\n')
+    output.write(manifest)
+    # Streaming tarfile's w|gz mode on Python 3.11 does not accept
+    # compresslevel; wrap its uncompressed stream in an explicit gzip file.
+    with gzip.GzipFile(fileobj=output, mode='wb', compresslevel=1) as zipped:
+        with tarfile.open(fileobj=zipped, mode='w|',
+                          format=tarfile.PAX_FORMAT, dereference=False) as tar:
+            for name in GROUPS[group]:
+                tar.add(Path(home)/name, arcname=name, recursive=True)
+    output.flush()
+    after = scan_group(home, group, hash_files=True)
+    require(source_manifest_equal(before, after),
+            'Backup changed while streaming group: '+group)
+    output.write(NETWORK_DONE)
+    output.flush()
+
+
 def verify_set(home, target, *, strict_external=True):
     home, target = Path(home), Path(target)
     require(target.is_dir() and not target.is_symlink(), 'Missing archive directory')
@@ -269,10 +311,15 @@ def main(argv=None):
     sub.add_parser('plan')
     arch = sub.add_parser('archive')
     arch.add_argument('--drive',required=True,help='EXACT mount point of a separate USB drive')
+    remote = sub.add_parser('network-stream', help='Binary archive stream for authenticated SSH client only')
+    remote.add_argument('--group', required=True, choices=sorted(GROUPS))
     check = sub.add_parser('verify')
     check.add_argument('--archive-dir',required=True,help='Exact verified archive set directory')
     args = parser.parse_args(argv)
     try:
+        if args.action == 'network-stream':
+            network_stream_group(HOME, args.group, sys.stdout.buffer)
+            return 0
         if args.action == 'plan':
             print('READ ONLY: historical backup and retained config ZIP sizes')
             print_report(total_report(HOME))

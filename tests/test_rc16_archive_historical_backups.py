@@ -111,6 +111,40 @@ class ArchiveTests(unittest.TestCase):
         target=tool.backup(self.home,self.dest,strict_external=False,archive_stamp='hardlink')
         self.assertTrue(tool.verify_set(self.home,target,strict_external=False))
 
+    def test_refuse_archive_timestamp_tampering(self):
+        snapshot=tool.scan_group(self.home,'old',hash_files=True)
+        target=self.dest/'timestamp.tar.gz'
+        tool.archive_group(self.home,snapshot,target)
+        with tarfile.open(target,'r:gz') as source:
+            members=[(m, source.extractfile(m).read() if m.isfile() else None)
+                     for m in source.getmembers()]
+        replacement=self.dest/'replacement.tar.gz'
+        with tarfile.open(replacement,'w:gz',format=tarfile.PAX_FORMAT) as tar:
+            for member,content in members:
+                if member.name.endswith('blob.bin'):
+                    member.mtime+=3600
+                    member.pax_headers.pop('mtime',None)
+                tar.addfile(member,io.BytesIO(content) if content is not None else None)
+        with self.assertRaisesRegex(tool.Refuse,'timestamp differs'):
+            tool.verify_archive(snapshot,replacement)
+
+    def test_refuse_archive_external_hardlink_target(self):
+        os.link(self.old/'blob.bin',self.old/'second-link.bin')
+        snapshot=tool.scan_group(self.home,'old',hash_files=True)
+        target=self.dest/'hardlink.tar.gz'
+        tool.archive_group(self.home,snapshot,target)
+        with tarfile.open(target,'r:gz') as source:
+            members=[(m,source.extractfile(m).read() if m.isfile() else None)
+                     for m in source.getmembers()]
+        replacement=self.dest/'external-hardlink.tar.gz'
+        with tarfile.open(replacement,'w:gz',format=tarfile.PAX_FORMAT) as tar:
+            for member,content in members:
+                if member.islnk():
+                    member.linkname='../outside'
+                tar.addfile(member,io.BytesIO(content) if content is not None else None)
+        with self.assertRaisesRegex(tool.Refuse,'Unsafe archive path'):
+            tool.verify_archive(snapshot,replacement)
+
     def test_receipt_not_written_when_archive_verification_fails(self):
         with patch.object(tool,'verify_archive',side_effect=tool.Refuse('damaged')):
             with self.assertRaises(tool.Refuse):
