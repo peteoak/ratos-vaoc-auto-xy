@@ -48,6 +48,12 @@ python3 -B /home/pi/AutoXY_ZipCleanup/scripts/rc16_loose_zip_cleanup.py remove \
 
 The script checks *every* pre-approved file again against its prior SHA256, size, inode, device and modification time, refusing if the inventory changed, and requires typing `DELETE OLD PACKAGES`. It writes a metadata-only receipt under `/home/pi/auto_xy/rollbacks/` **before** unlinking. On success the packages are gone and the receipt cannot restore them. Do not run while another maintenance session modifies these files. No sudo, restart or motion commands are used.
 
+## Owner-confirmed cleanup execution, 28 November 2026
+
+The read-only `check` found seven allowlisted root-level RC15 installation ZIPs, total **2,104,784 bytes**; plan `/home/pi/AutoXY_Zip_Package_Plan_20261128T102009147506Z.json`. An attempt to run `remove` with a literal placeholder name was safely refused. The subsequent corrected exact-plan command required and received `DELETE OLD PACKAGES`, listed each of the seven `REMOVED` names and created `/home/pi/auto_xy/rollbacks/zip-package-retirement-20261128T102222612699Z.json`. Owner-provided terminal output verifies successful deletion on the Pi, not merely offline testing. **Do not rerun these removal instructions for the already-deleted packages.**
+
+The tool's receipt is metadata only and cannot recreate deleted packages. The three current config backup ZIPs, camera references, diagnostic archives and remaining large historical backups were excluded and remain subject to separate off-device verification.
+
 ## Next phase (separate from this script)
 
 The larger historical directories `autoxy-pre-uninstall-20261102-040312`, `autoxy-factory-backups`, and `autoxy-quarantine-rc15-dev5-20261102` still require off-Pi archives and verification before deletion. The former already had three ZIP duplicates deleted in a previous confirmed step, so its previous size is now stale. Verify current disk usage and backup uniqueness before promising a volume of reclaimed storage. A verified off-device archive needs to retain original symlink metadata, file ownership where important, config revisions, camera commissioning and rollback data. Treat all three retained original `config-*.zip` files as protected until their external checksums are confirmed.
