@@ -12,6 +12,7 @@ CURRENT = [
     ROOT / 'docs/CURRENT_STATUS.md',
     ROOT / 'docs/RC16_PRINTER_INTEGRITY_AUDIT.md',
     ROOT / 'docs/RC16_PRINTER_CLEANUP_REVIEW_20261128.md',
+    ROOT / 'docs/RC16_LOOSE_ZIP_CLEANUP.md',
     ROOT / 'README.md',
     ROOT / 'docs/RC16_START_HERE.md',
     ROOT / 'docs/RC16_RELEASE_STATUS.md',
