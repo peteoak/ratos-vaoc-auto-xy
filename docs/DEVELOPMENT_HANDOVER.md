@@ -87,6 +87,8 @@ Read [RC16 source manifest](RC16_SOURCE_MANIFEST.json), [start guide](RC16_START
 
 **28 November on-printer confirmation:** the owner executed the exact dormant Trial04 extension retirement script. `check` and `retire` both passed; the Klipper `extras/auto_xy_local_recovery.py` symlink was unlinked, the historical source preserved, rollback receipt created at `/home/pi/auto_xy/rollbacks/retired-inactive-trial04-h1_8r5f6/receipt.json`, and two independent shell existence checks passed. **This installed-state change is confirmed**; no restart and no config/offset/G-code modification reported. This is *not* a physical COPY/MIRROR/two-tool print regression test. Do not offer the already-completed retirement as a pending install. Next: archive 4.40 GB of historical backups **off the Pi and verify integrity before discussing deletion**. See [owner cleanup review](RC16_PRINTER_CLEANUP_REVIEW_20261128.md).
 
+**28 November on-printer ZIP deduplication:** The owner hash-verified three pairs of historical `config-*.zip` files (different inodes, identical SHA256) and ran an exact-name/size/hash-scoped deletion of only the copies under `/home/pi/autoxy-pre-uninstall-20261102-040312/config/`. Console output confirms three removals, total 2,243,046,213 bytes; corresponding files in `/home/pi/printer_data/config/` were preserved. No off-printer backup is yet confirmed, and no further ZIP/backup deletion is authorized from this observation alone. See [status](CURRENT_STATUS.md).
+
 ## Open priorities (recheck against live code and printer evidence)
 
 1. **Confirm installed source/version** only when needed; the latest GitHub PR #14 and PR #15 updates are **not confirmed installed** by the conversation. Do not issue a non-matching old updater.
