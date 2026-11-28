@@ -28,6 +28,16 @@ A new **read-only** script, `scripts/rc16_printer_integrity_audit.py`, inventori
 
 Review instructions: [RC16 printer integrity audit](RC16_PRINTER_INTEGRITY_AUDIT.md). Next action: run this script on the Pi, review returned inventory, classify all suspected conflicts before proposing **separate**, reversible and narrowly scoped cleanup. Do not automatically remove all old files, alter Klipper source ownership or delete backups.
 
+## 28 November 2026 — owner printer audit reviewed; dormant Trial04 import retirement prepared
+
+Reviewed the owner-uploaded `AutoXY_Printer_Integrity_Audit_20261128_091706.zip` **privately** (SHA256 `690ea2b03b72d83f443a0b00a682d73abcea621450511cb5d21d76b7f563ae09`). No private inventory contents or printer config values were committed.
+
+**Observed:** Klipper Ready; no active/selected print or native VAOC; RC16 handoff enabled/armed, SD/resume guards true and retention enabled. All **10** checked installed RC16 source blobs match the repository. The legacy Trial04 `auto_xy_local_recovery.py` source and Klipper import symlink remain on disk, but its configuration is not loaded. No additional AutoXY processor-hook or startup-service candidate was reported. This is a bounded static inventory, **not complete dynamic handler/security certification**.
+
+**Action:** an exact-hash, safe-idle, rollback-receipted utility at `scripts/rc16_retire_inactive_trial04_extension.py` removes **only the dormant Klipper `extras` symlink** (not the source, native RatOS, config includes, offsets, G-code or camera refs). It performs pre/post checks and supports restore. **It has not been run on the printer.**
+
+Historical backups occupying **4,400,944,978 bytes** across `autoxy-pre-uninstall-20261102-040312`, `autoxy-factory-backups` and `autoxy-quarantine-rc15-dev5-20261102` need off-Pi verified archives and exact reference review before deletion. The audit's `unreadable/outside include` warnings for RatOS/timelapse are scanner-boundary limitations, not grounds to change the native configuration. See [owner-specific cleanup review](RC16_PRINTER_CLEANUP_REVIEW_20261128.md).
+
 ## Latest completed GitHub changes
 
 - **PR #15 — Trial04 conflict retirement**, merged as [`b1bcf924`](https://github.com/peteoak/ratos-vaoc-auto-xy/commit/b1bcf92406b63b70bfcf18066bffc88802e45b63): adds `scripts/rc16_retire_trial04_recovery.py`. This exact-source/symlink/idle/fault guard comments out *only* the old `[include auto_xy_local_recovery.cfg]` line, preserving the source, symlink, old config and all printer-specific settings, then verifies RC16 print/resume API guards after a Klipper restart. Includes rollback and regression tests. **No observed installation/verification yet.**
