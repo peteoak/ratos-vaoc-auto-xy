@@ -20,6 +20,14 @@
 | Recent adverse observation | 27 Nov COPY print correctly captured `TOTAL_TOOLSHIFTS=0` yet legacy Trial04 still staged it as `AutoXY_...gcode` |
 | New ChatGPT continuity | [Engineering handover](DEVELOPMENT_HANDOVER.md) and this status file exist in GitHub; ChatGPT Project instructions are managed separately |
 
+## 28 November 2026 — read-only installed-printer code and hook inventory
+
+A legacy Trial04 print interceptor was shown to stage an unexpected COPY job on 27 November. Although the reviewed PR #15 retirement migration was merged, its **installation has not been confirmed**. The owner has requested a broader review of the Pi's installed AutoXY and RatOS print-start code and elimination of any similar intrusive duplicates.
+
+A new **read-only** script, `scripts/rc16_printer_integrity_audit.py`, inventories active configuration includes, Klipper extension registrations and symlinks, source hashes against the RC16 source manifest, static print-hook candidates, selected startup references, and sanitised Moonraker state. It produces an inventory ZIP for private review; does not collect printer configuration values, G-code, camera frames, reference images, saved offsets or credentials and does not change any printer files. It is only the **inventory phase**: no installed printer report has yet been received or assessed.
+
+Review instructions: [RC16 printer integrity audit](RC16_PRINTER_INTEGRITY_AUDIT.md). Next action: run this script on the Pi, review returned inventory, classify all suspected conflicts before proposing **separate**, reversible and narrowly scoped cleanup. Do not automatically remove all old files, alter Klipper source ownership or delete backups.
+
 ## Latest completed GitHub changes
 
 - **PR #15 — Trial04 conflict retirement**, merged as [`b1bcf924`](https://github.com/peteoak/ratos-vaoc-auto-xy/commit/b1bcf92406b63b70bfcf18066bffc88802e45b63): adds `scripts/rc16_retire_trial04_recovery.py`. This exact-source/symlink/idle/fault guard comments out *only* the old `[include auto_xy_local_recovery.cfg]` line, preserving the source, symlink, old config and all printer-specific settings, then verifies RC16 print/resume API guards after a Klipper restart. Includes rollback and regression tests. **No observed installation/verification yet.**
