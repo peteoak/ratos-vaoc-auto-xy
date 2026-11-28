@@ -15,10 +15,20 @@
 | Latest pre-handover source merge | `b1bcf92406b63b70bfcf18066bffc88802e45b63` (PR #15, 27 Nov; legacy Trial04 interceptor retirement) |
 | Previous detector merge | `7724b4eea0081da25c89f18bf51a472bccf35c90` (PR #14; strict local annular corroboration) |
 | Latest known CI on source PR | PR #15, **422 tests run; 5 skipped; CI passed** (offline test suite) |
-| Installed versions of PR #14/#15 updates | **Unconfirmed**; do not assume printer applied them |
+| Installed version / legacy import | 10 checked installed RC16 files matched `main` at 28 Nov audit; Trial04 import symlink removal **confirmed on Pi**; other update installation history inferred only where directly verified |
 | Recent owner-confirmed print observation | A subsequent print started and **automatic XY calibration succeeded without manual VAOC** (26 Nov), but installed code revision not established |
 | Recent adverse observation | 27 Nov COPY print correctly captured `TOTAL_TOOLSHIFTS=0` yet legacy Trial04 still staged it as `AutoXY_...gcode` |
 | New ChatGPT continuity | [Engineering handover](DEVELOPMENT_HANDOVER.md) and this status file exist in GitHub; ChatGPT Project instructions are managed separately |
+
+## 28 November 2026 — Trial04 dormant import symlink **retired on printer (owner verified)**
+
+The owner ran the exact reviewed `scripts/rc16_retire_inactive_trial04_extension.py` from a pinned GitHub source at `/home/pi/AutoXY_RC16_Cleanup`. The actual Pi output confirms:
+- `check`: **PRECHECK PASS**; legacy Trial04 was unloaded, RC16 guarded, exact expected symlink/source matched.
+- `retire`: **RETIRED INACTIVE SYMLINK** at `/home/pi/klipper/klippy/extras/auto_xy_local_recovery.py`; original source at `/home/pi/auto_xy/klipper/auto_xy_local_recovery.py` retained; receipt stored at `/home/pi/auto_xy/rollbacks/retired-inactive-trial04-h1_8r5f6/receipt.json`.
+- Owner's independent `test ! -e ... && test ! -L ...` and historical `test -f ...`: **both PASS**.
+- Utility reports no Klipper restart and no changes to config, offsets or G-code. This is a **real printer-side filesystem confirmation** of the dormant symlink removal, not a new demonstration of print-start modes or dual-tool motion safety.
+
+**Do not rerun the retirement** or restore the dormant link except for a justified, supervised rollback. Keep the receipt and original source. Next storage task: off-Pi, independently validated backups of three specific historical root-level directories totalling **4,400,944,978 bytes** at the audit snapshot. They have NOT been deleted and may contain unique recovery/commissioning data. [Reviewed cleanup classes and archive procedure](RC16_PRINTER_CLEANUP_REVIEW_20261128.md).
 
 ## 28 November 2026 — read-only installed-printer code and hook inventory
 
